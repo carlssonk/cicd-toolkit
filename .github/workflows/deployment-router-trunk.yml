@@ -1,0 +1,69 @@
+name: Deployment Router Trunk (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      event_name:
+        required: true
+        type: string
+      branch:
+        required: true
+        type: string
+      workflow_dispatch_environment:
+        required: false
+        type: string
+        default: ''
+      workflow_dispatch_tf_action:
+        required: false
+        type: string
+        default: ''
+    outputs:
+      environments:
+        description: "Environments to deploy"
+        value: ${{ jobs.strategy.outputs.environments }}
+      tf_action:
+        description: "Terraform action to perform (plan or apply)"
+        value: ${{ jobs.strategy.outputs.action }}
+
+jobs:
+  strategy:
+    name: Trunk Strategy
+    runs-on: ubuntu-latest
+    outputs:
+      environments: ${{ steps.set-config.outputs.environments }}
+      tf_action: ${{ steps.set-config.outputs.tf_action }}
+    steps:
+      - id: set-config
+        run: |
+          # Handle manual workflow_dispatch trigger
+          if [ "${{ inputs.event_name }}" = "workflow_dispatch" ]; then
+            TF_ACTION="${{ inputs.workflow_dispatch_tf_action }}"
+            ENVIRONMENTS="[\"${{ inputs.workflow_dispatch_environment }}\"]"
+          else
+            BRANCH="${{ inputs.branch }}"
+            
+            # Determine environments and action based on event and branch
+            if [ "${{ inputs.event_name }}" = "pull_request" ]; then
+              TF_ACTION="plan"
+              if [ "$BRANCH" = "main" ]; then
+                ENVIRONMENTS="[\"staging\",\"production\"]"
+              elif [[ "$BRANCH" == dev/* ]]; then
+                ENVIRONMENTS="[\"dev\"]"
+              else
+                ENVIRONMENTS="[]"
+              fi
+            elif [ "${{ inputs.event_name }}" = "push" ] && [ "$BRANCH" = "main" ]; then
+              TF_ACTION="apply"
+              ENVIRONMENTS="[\"staging\",\"production\"]"
+            elif [ "${{ inputs.event_name }}" = "push" ] && [[ "$BRANCH" == dev/* ]]; then
+              TF_ACTION="apply"
+              ENVIRONMENTS="[\"dev\"]"
+            else
+              ENVIRONMENTS="[]"
+              TF_ACTION="plan"
+            fi
+          fi
+
+          # Set outputs
+          echo "environments=$ENVIRONMENTS" >> $GITHUB_OUTPUT
+          echo "tf_action=$TF_ACTION" >> $GITHUB_OUTPUT

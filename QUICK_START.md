@@ -197,7 +197,6 @@ aws s3api head-object \
 
 - [Add CloudFront](./docs/deploy-s3.md#cloudfront-integration)
 - [Set up multi-environment deployment](./docs/examples/multi-env-deploy.yml)
-- [Configure deployment routing](./docs/deployment-router.md)
 - [Add release tagging](./docs/create-release.md)
 
 ## 🆘 Troubleshooting

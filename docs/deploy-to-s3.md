@@ -190,5 +190,4 @@ Ensure:
 
 - [Rollback S3 Deployment](./rollback-s3.md)
 - [Create Release](./create-release.md)
-- [Deployment Router](./deployment-router.md)
 

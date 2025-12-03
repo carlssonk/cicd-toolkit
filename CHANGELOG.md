@@ -47,13 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-release support
 - Idempotent operation
 
-#### Deployment Router (`deployment-router.yml`)
+#### Deployment Router (`deployment-router-trunk.yml`)
 - Trunk-based development strategy
-- GitFlow strategy
-- GitHub Flow strategy
-- Custom routing with JSON
-- Event-aware routing
-- Action determination
+- Terraform Action determination
 
 #### Notify (`notify.yml`)
 - Slack notifications

@@ -20,12 +20,11 @@ on:
 jobs:
   # Determine deployment strategy
   route:
-    uses: carlssonk/cicd-toolkit/.github/workflows/deployment-router.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deployment-router-trunk.yml@v1
     with:
       event_name: ${{ github.event_name }}
       branch: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
       workflow_dispatch_environment: ${{ github.event.inputs.environment }}
-      deployment_strategy: trunk
 
   # Deploy to dev environment
   deploy-dev:

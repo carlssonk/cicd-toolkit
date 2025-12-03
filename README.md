@@ -18,7 +18,6 @@ A collection of production-ready, reusable GitHub Actions workflows for modern a
 | **deploy-s3.yml** | Deploy applications to S3 with versioning and CloudFront support | [Docs](./docs/deploy-s3.md) |
 | **rollback-s3.yml** | Rollback S3 deployments to previous versions | [Docs](./docs/rollback-s3.md) |
 | **create-release.yml** | Create release tags and GitHub releases with changelogs | [Docs](./docs/create-release.md) |
-| **deployment-router.yml** | Route deployments based on branching strategy | [Docs](./docs/deployment-router.md) |
 | **notify.yml** | Send notifications to various platforms | [Docs](./docs/notify.md) |
 
 ## 🎯 Quick Start
@@ -130,7 +129,6 @@ jobs:
 - [Deploy to S3](./docs/deploy-s3.md) - Comprehensive S3 deployment with versioning
 - [Rollback S3](./docs/rollback-s3.md) - Rollback deployments safely
 - [Create Release](./docs/create-release.md) - Automated release management
-- [Deployment Router](./docs/deployment-router.md) - Smart deployment routing
 - [Send Notification](./docs/notify.md) - Multi-platform notifications
 
 ### Examples
