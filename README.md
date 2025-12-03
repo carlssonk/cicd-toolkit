@@ -401,5 +401,5 @@ Built with best practices from:
 
 ---
 
-**Made with ❤️ for the DevOps community**
+**Made ~~with ❤️ for the DevOps community~~ by a Clanker**
 
