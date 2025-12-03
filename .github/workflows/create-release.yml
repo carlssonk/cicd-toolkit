@@ -1,0 +1,267 @@
+name: Create Release Tag (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Environment being deployed (e.g., staging, production)"
+        required: true
+        type: string
+      commit_hash:
+        description: "Commit hash being deployed"
+        required: true
+        type: string
+      tag_prefix:
+        description: "Prefix for the tag name (e.g., 'app', 'v', 'release')"
+        required: false
+        type: string
+        default: "app"
+      create_release:
+        description: "Create a GitHub release (in addition to the tag)"
+        required: false
+        type: boolean
+        default: true
+      release_as_latest:
+        description: "Mark the release as latest"
+        required: false
+        type: boolean
+        default: true
+      release_as_prerelease:
+        description: "Mark the release as prerelease"
+        required: false
+        type: boolean
+        default: false
+      generate_changelog:
+        description: "Generate changelog from commits since last tag"
+        required: false
+        type: boolean
+        default: true
+      changelog_types:
+        description: "Commit types to include in changelog (comma-separated: feat,fix,docs,etc)"
+        required: false
+        type: string
+        default: "feat,fix,perf,refactor"
+      only_production:
+        description: "Only create releases for production environment"
+        required: false
+        type: boolean
+        default: true
+    outputs:
+      tag_name:
+        description: "The tag name that was created"
+        value: ${{ jobs.create-release.outputs.tag_name }}
+      tag_existed:
+        description: "Whether the tag already existed"
+        value: ${{ jobs.create-release.outputs.tag_existed }}
+      release_url:
+        description: "URL of the created GitHub release"
+        value: ${{ jobs.create-release.outputs.release_url }}
+
+jobs:
+  create-release:
+    name: Create Release for ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: ${{ !inputs.only_production || inputs.environment == 'production' }}
+    permissions:
+      contents: write
+    outputs:
+      tag_name: ${{ steps.create_tag.outputs.tag_name }}
+      tag_existed: ${{ steps.create_tag.outputs.tag_exists }}
+      release_url: ${{ steps.create_release.outputs.url }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Create and push tag
+        id: create_tag
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Handle both short and long commit hashes - trim to 8 characters
+          COMMIT_HASH_INPUT="${{ inputs.commit_hash }}"
+          COMMIT_HASH="${COMMIT_HASH_INPUT:0:8}"
+          TAG_NAME="${{ inputs.tag_prefix }}-${COMMIT_HASH}"
+          
+          echo "Creating tag: ${TAG_NAME}"
+          
+          # Check if tag already exists
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG_NAME}" >/dev/null 2>&1; then
+            echo "Tag ${TAG_NAME} already exists. Skipping."
+            echo "tag_exists=true" >> $GITHUB_OUTPUT
+            echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+          else
+            git tag "${TAG_NAME}" "${{ inputs.commit_hash }}"
+            git push origin "${TAG_NAME}"
+            echo "tag_exists=false" >> $GITHUB_OUTPUT
+            echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+            echo "✅ Tag ${TAG_NAME} created and pushed"
+          fi
+
+      - name: Generate changelog
+        if: steps.create_tag.outputs.tag_exists == 'false' && inputs.generate_changelog == true
+        id: changelog
+        run: |
+          TAG_NAME="${{ steps.create_tag.outputs.tag_name }}"
+          COMMIT_HASH="${{ inputs.commit_hash }}"
+          
+          # Get the previous tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 "${TAG_NAME}^" 2>/dev/null || echo "")
+          
+          if [[ -z "$PREVIOUS_TAG" ]]; then
+            echo "No previous tag found, showing all commits"
+            COMMIT_RANGE="${COMMIT_HASH}"
+          else
+            echo "Previous tag: ${PREVIOUS_TAG}"
+            COMMIT_RANGE="${PREVIOUS_TAG}..${COMMIT_HASH}"
+          fi
+          
+          # Parse changelog types
+          IFS=',' read -ra TYPES <<< "${{ inputs.changelog_types }}"
+          
+          # Generate changelog
+          CHANGELOG_FILE=$(mktemp)
+          echo "## 📝 Changes" > "$CHANGELOG_FILE"
+          echo "" >> "$CHANGELOG_FILE"
+          
+          # Group commits by type
+          for TYPE in "${TYPES[@]}"; do
+            TYPE=$(echo "$TYPE" | xargs) # trim whitespace
+            
+            # Get commits of this type
+            COMMITS=$(git log "$COMMIT_RANGE" --pretty=format:"%h %s" --grep="^${TYPE}" --grep="^${TYPE}(" --grep="^${TYPE}:" -E 2>/dev/null || echo "")
+            
+            if [[ -n "$COMMITS" ]]; then
+              case "$TYPE" in
+                feat)
+                  echo "### ✨ Features" >> "$CHANGELOG_FILE"
+                  ;;
+                fix)
+                  echo "### 🐛 Bug Fixes" >> "$CHANGELOG_FILE"
+                  ;;
+                perf)
+                  echo "### ⚡ Performance" >> "$CHANGELOG_FILE"
+                  ;;
+                refactor)
+                  echo "### ♻️ Refactoring" >> "$CHANGELOG_FILE"
+                  ;;
+                docs)
+                  echo "### 📚 Documentation" >> "$CHANGELOG_FILE"
+                  ;;
+                test)
+                  echo "### 🧪 Tests" >> "$CHANGELOG_FILE"
+                  ;;
+                chore)
+                  echo "### 🔧 Chores" >> "$CHANGELOG_FILE"
+                  ;;
+                *)
+                  echo "### ${TYPE^}" >> "$CHANGELOG_FILE"
+                  ;;
+              esac
+              
+              echo "$COMMITS" | while read -r line; do
+                echo "- $line" >> "$CHANGELOG_FILE"
+              done
+              echo "" >> "$CHANGELOG_FILE"
+            fi
+          done
+          
+          # Add other commits
+          OTHER_COMMITS=$(git log "$COMMIT_RANGE" --pretty=format:"%h %s" --invert-grep --grep="^($(IFS='|'; echo "${TYPES[*]}"))" -E 2>/dev/null || echo "")
+          
+          if [[ -n "$OTHER_COMMITS" ]]; then
+            echo "### 🔀 Other Changes" >> "$CHANGELOG_FILE"
+            echo "$OTHER_COMMITS" | while read -r line; do
+              echo "- $line" >> "$CHANGELOG_FILE"
+            done
+            echo "" >> "$CHANGELOG_FILE"
+          fi
+          
+          # Save changelog
+          echo "changelog_file=${CHANGELOG_FILE}" >> $GITHUB_OUTPUT
+          
+          echo "Generated changelog:"
+          cat "$CHANGELOG_FILE"
+
+      - name: Create GitHub Release
+        if: steps.create_tag.outputs.tag_exists == 'false' && inputs.create_release == true
+        id: create_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG_NAME="${{ steps.create_tag.outputs.tag_name }}"
+          COMMIT_HASH="${{ inputs.commit_hash }}"
+          
+          # Get commit details
+          COMMIT_MSG=$(git log -1 --pretty=format:"%s" "$COMMIT_HASH")
+          COMMIT_AUTHOR=$(git log -1 --pretty=format:"%an" "$COMMIT_HASH")
+          COMMIT_DATE=$(git log -1 --pretty=format:"%ci" "$COMMIT_HASH")
+          
+          # Build release notes
+          RELEASE_NOTES=$(cat <<EOF
+          **${{ inputs.environment == 'production' && 'Production' || inputs.environment == 'staging' && 'Staging' || inputs.environment }} Deployment**
+          
+          **Commit:** \`${COMMIT_HASH}\`
+          **Message:** ${COMMIT_MSG}
+          **Author:** ${COMMIT_AUTHOR}
+          **Date:** ${COMMIT_DATE}
+          EOF
+          )
+          
+          # Add changelog if generated
+          if [[ -n "${{ steps.changelog.outputs.changelog_file }}" ]]; then
+            CHANGELOG_CONTENT=$(cat "${{ steps.changelog.outputs.changelog_file }}")
+            RELEASE_NOTES=$(cat <<EOF
+          ${RELEASE_NOTES}
+          
+          ---
+          
+          ${CHANGELOG_CONTENT}
+          EOF
+          )
+          fi
+          
+          # Create release
+          RELEASE_ARGS=(
+            "${TAG_NAME}"
+            --title "${{ inputs.environment == 'production' && '🚀' || '🧪' }} Release ${COMMIT_HASH} (${{ inputs.environment }})"
+            --notes "${RELEASE_NOTES}"
+          )
+          
+          if [[ "${{ inputs.release_as_latest }}" == "true" ]]; then
+            RELEASE_ARGS+=(--latest)
+          fi
+          
+          if [[ "${{ inputs.release_as_prerelease }}" == "true" ]]; then
+            RELEASE_ARGS+=(--prerelease)
+          fi
+          
+          RELEASE_URL=$(gh release create "${RELEASE_ARGS[@]}" --json url --jq .url)
+          
+          echo "url=${RELEASE_URL}" >> $GITHUB_OUTPUT
+          echo "✅ Release created: ${RELEASE_URL}"
+
+      - name: Summary
+        if: steps.create_tag.outputs.tag_exists == 'false'
+        run: |
+          echo "## 🏷️ Release Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag**: \`${{ steps.create_tag.outputs.tag_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: \`${{ inputs.commit_hash }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ -n "${{ steps.create_release.outputs.url }}" ]]; then
+            echo "- **Release URL**: ${{ steps.create_release.outputs.url }}" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Summary (Tag Existed)
+        if: steps.create_tag.outputs.tag_exists == 'true'
+        run: |
+          echo "## ℹ️ Tag Already Exists" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Tag \`${{ steps.create_tag.outputs.tag_name }}\` already exists. Skipped creation." >> $GITHUB_STEP_SUMMARY
+

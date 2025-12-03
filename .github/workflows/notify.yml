@@ -1,0 +1,397 @@
+name: Send Notification (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      notification_type:
+        description: "Type of notification (slack, discord, teams, email, github-discussion)"
+        required: true
+        type: string
+      status:
+        description: "Status of the workflow (success, failure, cancelled, warning)"
+        required: true
+        type: string
+      title:
+        description: "Notification title"
+        required: true
+        type: string
+      message:
+        description: "Notification message"
+        required: false
+        type: string
+        default: ""
+      environment:
+        description: "Environment name (e.g., dev, staging, production)"
+        required: false
+        type: string
+        default: ""
+      commit_hash:
+        description: "Commit hash"
+        required: false
+        type: string
+        default: ""
+      deployment_url:
+        description: "URL of the deployment"
+        required: false
+        type: string
+        default: ""
+      slack_webhook_url:
+        description: "Slack webhook URL (required for slack notifications)"
+        required: false
+        type: string
+        default: ""
+      discord_webhook_url:
+        description: "Discord webhook URL (required for discord notifications)"
+        required: false
+        type: string
+        default: ""
+      teams_webhook_url:
+        description: "Microsoft Teams webhook URL (required for teams notifications)"
+        required: false
+        type: string
+        default: ""
+      github_discussion_category:
+        description: "GitHub Discussion category (required for github-discussion notifications)"
+        required: false
+        type: string
+        default: "Announcements"
+      include_workflow_link:
+        description: "Include link to the workflow run"
+        required: false
+        type: boolean
+        default: true
+      include_commit_info:
+        description: "Include commit information"
+        required: false
+        type: boolean
+        default: true
+      mention_on_failure:
+        description: "Mention/ping on failure (e.g., '@channel' for Slack, '@here' for Discord)"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      SLACK_WEBHOOK_URL:
+        description: "Slack webhook URL (alternative to input)"
+        required: false
+      DISCORD_WEBHOOK_URL:
+        description: "Discord webhook URL (alternative to input)"
+        required: false
+      TEAMS_WEBHOOK_URL:
+        description: "Microsoft Teams webhook URL (alternative to input)"
+        required: false
+
+jobs:
+  notify:
+    name: Send Notification
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      discussions: write  # For GitHub Discussions
+    steps:
+      - name: Checkout
+        if: inputs.include_commit_info == true && inputs.commit_hash != ''
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get commit info
+        if: inputs.include_commit_info == true && inputs.commit_hash != ''
+        id: commit_info
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=format:"%s" "${{ inputs.commit_hash }}" 2>/dev/null || echo "N/A")
+          COMMIT_AUTHOR=$(git log -1 --pretty=format:"%an" "${{ inputs.commit_hash }}" 2>/dev/null || echo "N/A")
+          
+          echo "message=${COMMIT_MSG}" >> $GITHUB_OUTPUT
+          echo "author=${COMMIT_AUTHOR}" >> $GITHUB_OUTPUT
+
+      - name: Set status emoji and color
+        id: status_config
+        run: |
+          case "${{ inputs.status }}" in
+            success)
+              echo "emoji=✅" >> $GITHUB_OUTPUT
+              echo "color=good" >> $GITHUB_OUTPUT
+              echo "color_hex=#36a64f" >> $GITHUB_OUTPUT
+              ;;
+            failure)
+              echo "emoji=❌" >> $GITHUB_OUTPUT
+              echo "color=danger" >> $GITHUB_OUTPUT
+              echo "color_hex=#ff0000" >> $GITHUB_OUTPUT
+              ;;
+            cancelled)
+              echo "emoji=⚠️" >> $GITHUB_OUTPUT
+              echo "color=warning" >> $GITHUB_OUTPUT
+              echo "color_hex=#ffcc00" >> $GITHUB_OUTPUT
+              ;;
+            warning)
+              echo "emoji=⚠️" >> $GITHUB_OUTPUT
+              echo "color=warning" >> $GITHUB_OUTPUT
+              echo "color_hex=#ffcc00" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "emoji=ℹ️" >> $GITHUB_OUTPUT
+              echo "color=#808080" >> $GITHUB_OUTPUT
+              echo "color_hex=#808080" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Send Slack notification
+        if: inputs.notification_type == 'slack'
+        run: |
+          WEBHOOK_URL="${{ inputs.slack_webhook_url || secrets.SLACK_WEBHOOK_URL }}"
+          
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "❌ Error: Slack webhook URL not provided"
+            exit 1
+          fi
+          
+          # Build message
+          TEXT="${{ steps.status_config.outputs.emoji }} ${{ inputs.title }}"
+          
+          if [ "${{ inputs.status }}" = "failure" ] && [ -n "${{ inputs.mention_on_failure }}" ]; then
+            TEXT="${{ inputs.mention_on_failure }} ${TEXT}"
+          fi
+          
+          # Build fields
+          FIELDS="[]"
+          
+          if [ -n "${{ inputs.environment }}" ]; then
+            FIELDS=$(echo "$FIELDS" | jq '. += [{"title": "Environment", "value": "${{ inputs.environment }}", "short": true}]')
+          fi
+          
+          if [ -n "${{ inputs.commit_hash }}" ]; then
+            FIELDS=$(echo "$FIELDS" | jq '. += [{"title": "Commit", "value": "`${{ inputs.commit_hash }}`", "short": true}]')
+          fi
+          
+          if [ "${{ inputs.include_commit_info }}" = "true" ] && [ -n "${{ steps.commit_info.outputs.message }}" ]; then
+            FIELDS=$(echo "$FIELDS" | jq --arg msg "${{ steps.commit_info.outputs.message }}" '. += [{"title": "Commit Message", "value": $msg, "short": false}]')
+          fi
+          
+          if [ "${{ inputs.include_workflow_link }}" = "true" ]; then
+            FIELDS=$(echo "$FIELDS" | jq '. += [{"title": "Workflow", "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>", "short": false}]')
+          fi
+          
+          if [ -n "${{ inputs.deployment_url }}" ]; then
+            FIELDS=$(echo "$FIELDS" | jq '. += [{"title": "Deployment", "value": "<${{ inputs.deployment_url }}|View Deployment>", "short": false}]')
+          fi
+          
+          # Build payload
+          PAYLOAD=$(jq -n \
+            --arg text "$TEXT" \
+            --arg color "${{ steps.status_config.outputs.color }}" \
+            --arg message "${{ inputs.message }}" \
+            --argjson fields "$FIELDS" \
+            '{
+              text: $text,
+              attachments: [{
+                color: $color,
+                text: $message,
+                fields: $fields,
+                footer: "GitHub Actions",
+                ts: now
+              }]
+            }')
+          
+          curl -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
+          
+          echo "✅ Slack notification sent"
+
+      - name: Send Discord notification
+        if: inputs.notification_type == 'discord'
+        run: |
+          WEBHOOK_URL="${{ inputs.discord_webhook_url || secrets.DISCORD_WEBHOOK_URL }}"
+          
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "❌ Error: Discord webhook URL not provided"
+            exit 1
+          fi
+          
+          # Build message
+          CONTENT="${{ steps.status_config.outputs.emoji }} **${{ inputs.title }}**"
+          
+          if [ "${{ inputs.status }}" = "failure" ] && [ -n "${{ inputs.mention_on_failure }}" ]; then
+            CONTENT="${{ inputs.mention_on_failure }} ${CONTENT}"
+          fi
+          
+          # Build embed fields
+          FIELDS="[]"
+          
+          if [ -n "${{ inputs.environment }}" ]; then
+            FIELDS=$(echo "$FIELDS" | jq '. += [{"name": "Environment", "value": "${{ inputs.environment }}", "inline": true}]')
+          fi
+          
+          if [ -n "${{ inputs.commit_hash }}" ]; then
+            FIELDS=$(echo "$FIELDS" | jq '. += [{"name": "Commit", "value": "`${{ inputs.commit_hash }}`", "inline": true}]')
+          fi
+          
+          if [ "${{ inputs.include_commit_info }}" = "true" ] && [ -n "${{ steps.commit_info.outputs.message }}" ]; then
+            FIELDS=$(echo "$FIELDS" | jq --arg msg "${{ steps.commit_info.outputs.message }}" '. += [{"name": "Commit Message", "value": $msg, "inline": false}]')
+          fi
+          
+          if [ "${{ inputs.include_workflow_link }}" = "true" ]; then
+            FIELDS=$(echo "$FIELDS" | jq '. += [{"name": "Workflow", "value": "[View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})", "inline": false}]')
+          fi
+          
+          if [ -n "${{ inputs.deployment_url }}" ]; then
+            FIELDS=$(echo "$FIELDS" | jq '. += [{"name": "Deployment", "value": "[View Deployment](${{ inputs.deployment_url }})", "inline": false}]')
+          fi
+          
+          # Convert hex color to decimal for Discord
+          COLOR_HEX="${{ steps.status_config.outputs.color_hex }}"
+          COLOR_DECIMAL=$((16#${COLOR_HEX#\#}))
+          
+          # Build payload
+          PAYLOAD=$(jq -n \
+            --arg content "$CONTENT" \
+            --arg description "${{ inputs.message }}" \
+            --argjson color "$COLOR_DECIMAL" \
+            --argjson fields "$FIELDS" \
+            '{
+              content: $content,
+              embeds: [{
+                description: $description,
+                color: $color,
+                fields: $fields,
+                footer: {
+                  text: "GitHub Actions"
+                },
+                timestamp: (now | todate)
+              }]
+            }')
+          
+          curl -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
+          
+          echo "✅ Discord notification sent"
+
+      - name: Send Microsoft Teams notification
+        if: inputs.notification_type == 'teams'
+        run: |
+          WEBHOOK_URL="${{ inputs.teams_webhook_url || secrets.TEAMS_WEBHOOK_URL }}"
+          
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "❌ Error: Microsoft Teams webhook URL not provided"
+            exit 1
+          fi
+          
+          # Build facts
+          FACTS="[]"
+          
+          if [ -n "${{ inputs.environment }}" ]; then
+            FACTS=$(echo "$FACTS" | jq '. += [{"name": "Environment", "value": "${{ inputs.environment }}"}]')
+          fi
+          
+          if [ -n "${{ inputs.commit_hash }}" ]; then
+            FACTS=$(echo "$FACTS" | jq '. += [{"name": "Commit", "value": "${{ inputs.commit_hash }}"}]')
+          fi
+          
+          if [ "${{ inputs.include_commit_info }}" = "true" ] && [ -n "${{ steps.commit_info.outputs.message }}" ]; then
+            FACTS=$(echo "$FACTS" | jq --arg msg "${{ steps.commit_info.outputs.message }}" '. += [{"name": "Commit Message", "value": $msg}]')
+          fi
+          
+          # Build potential actions
+          ACTIONS="[]"
+          
+          if [ "${{ inputs.include_workflow_link }}" = "true" ]; then
+            ACTIONS=$(echo "$ACTIONS" | jq '. += [{"@type": "OpenUri", "name": "View Workflow", "targets": [{"os": "default", "uri": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}]}]')
+          fi
+          
+          if [ -n "${{ inputs.deployment_url }}" ]; then
+            ACTIONS=$(echo "$ACTIONS" | jq '. += [{"@type": "OpenUri", "name": "View Deployment", "targets": [{"os": "default", "uri": "${{ inputs.deployment_url }}"}]}]')
+          fi
+          
+          # Build payload
+          PAYLOAD=$(jq -n \
+            --arg title "${{ steps.status_config.outputs.emoji }} ${{ inputs.title }}" \
+            --arg text "${{ inputs.message }}" \
+            --arg color "${{ steps.status_config.outputs.color_hex }}" \
+            --argjson facts "$FACTS" \
+            --argjson actions "$ACTIONS" \
+            '{
+              "@type": "MessageCard",
+              "@context": "https://schema.org/extensions",
+              summary: $title,
+              themeColor: $color,
+              title: $title,
+              text: $text,
+              sections: [{
+                facts: $facts
+              }],
+              potentialAction: $actions
+            }')
+          
+          curl -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
+          
+          echo "✅ Microsoft Teams notification sent"
+
+      - name: Create GitHub Discussion
+        if: inputs.notification_type == 'github-discussion'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Build discussion body
+          BODY="## ${{ steps.status_config.outputs.emoji }} ${{ inputs.title }}"
+          
+          if [ -n "${{ inputs.message }}" ]; then
+            BODY="${BODY}\n\n${{ inputs.message }}"
+          fi
+          
+          BODY="${BODY}\n\n---\n\n"
+          
+          if [ -n "${{ inputs.environment }}" ]; then
+            BODY="${BODY}\n- **Environment**: ${{ inputs.environment }}"
+          fi
+          
+          if [ -n "${{ inputs.commit_hash }}" ]; then
+            BODY="${BODY}\n- **Commit**: \`${{ inputs.commit_hash }}\`"
+          fi
+          
+          if [ "${{ inputs.include_commit_info }}" = "true" ] && [ -n "${{ steps.commit_info.outputs.message }}" ]; then
+            BODY="${BODY}\n- **Commit Message**: ${{ steps.commit_info.outputs.message }}"
+          fi
+          
+          if [ "${{ inputs.include_workflow_link }}" = "true" ]; then
+            BODY="${BODY}\n- **Workflow**: [View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          fi
+          
+          if [ -n "${{ inputs.deployment_url }}" ]; then
+            BODY="${BODY}\n- **Deployment**: [View Deployment](${{ inputs.deployment_url }})"
+          fi
+          
+          # Create discussion
+          gh api graphql -f query='
+            mutation($repositoryId: ID!, $categoryId: ID!, $title: String!, $body: String!) {
+              createDiscussion(input: {
+                repositoryId: $repositoryId,
+                categoryId: $categoryId,
+                title: $title,
+                body: $body
+              }) {
+                discussion {
+                  url
+                }
+              }
+            }
+          ' \
+            -f repositoryId="$(gh api repos/${{ github.repository }} --jq .node_id)" \
+            -f categoryId="$(gh api repos/${{ github.repository }}/discussions/categories --jq '.[] | select(.name=="${{ inputs.github_discussion_category }}") | .node_id')" \
+            -f title="${{ inputs.title }}" \
+            -f body="${BODY}"
+          
+          echo "✅ GitHub Discussion created"
+
+      - name: Summary
+        run: |
+          echo "## 📢 Notification Sent" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Type**: ${{ inputs.notification_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ inputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Title**: ${{ inputs.title }}" >> $GITHUB_STEP_SUMMARY
+

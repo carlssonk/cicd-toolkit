@@ -1,0 +1,207 @@
+name: Deployment Router (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      event_name:
+        description: "GitHub event name (push, pull_request, workflow_dispatch)"
+        required: true
+        type: string
+      branch:
+        description: "Branch name"
+        required: true
+        type: string
+      workflow_dispatch_environment:
+        description: "Environment selected in workflow_dispatch (if applicable)"
+        required: false
+        type: string
+        default: ''
+      workflow_dispatch_action:
+        description: "Action selected in workflow_dispatch (if applicable, e.g., plan/apply)"
+        required: false
+        type: string
+        default: ''
+      deployment_strategy:
+        description: "Deployment strategy (trunk, gitflow, github-flow, custom)"
+        required: false
+        type: string
+        default: "trunk"
+      dev_branch_pattern:
+        description: "Pattern for dev branches (e.g., 'dev/*', 'develop/*')"
+        required: false
+        type: string
+        default: "dev/*"
+      staging_branch:
+        description: "Branch name for staging (gitflow only)"
+        required: false
+        type: string
+        default: "staging"
+      production_branch:
+        description: "Branch name for production (default: main)"
+        required: false
+        type: string
+        default: "main"
+      custom_routing:
+        description: "Custom routing JSON (for custom strategy)"
+        required: false
+        type: string
+        default: '{}'
+    outputs:
+      environments:
+        description: "JSON array of environments to deploy to"
+        value: ${{ jobs.route.outputs.environments }}
+      action:
+        description: "Action to perform (e.g., deploy, plan, apply)"
+        value: ${{ jobs.route.outputs.action }}
+      should_deploy:
+        description: "Whether deployment should proceed"
+        value: ${{ jobs.route.outputs.should_deploy }}
+
+jobs:
+  route:
+    name: Determine Deployment Strategy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      environments: ${{ steps.set-config.outputs.environments }}
+      action: ${{ steps.set-config.outputs.action }}
+      should_deploy: ${{ steps.set-config.outputs.should_deploy }}
+    steps:
+      - id: set-config
+        run: |
+          STRATEGY="${{ inputs.deployment_strategy }}"
+          EVENT="${{ inputs.event_name }}"
+          BRANCH="${{ inputs.branch }}"
+          
+          echo "Strategy: ${STRATEGY}"
+          echo "Event: ${EVENT}"
+          echo "Branch: ${BRANCH}"
+          
+          # Initialize defaults
+          ENVIRONMENTS="[]"
+          ACTION="deploy"
+          SHOULD_DEPLOY="false"
+          
+          # Handle manual workflow_dispatch trigger
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            if [ -n "${{ inputs.workflow_dispatch_environment }}" ]; then
+              ENVIRONMENTS="[\"${{ inputs.workflow_dispatch_environment }}\"]"
+              SHOULD_DEPLOY="true"
+            fi
+            
+            if [ -n "${{ inputs.workflow_dispatch_action }}" ]; then
+              ACTION="${{ inputs.workflow_dispatch_action }}"
+            fi
+          else
+            # Route based on strategy
+            case "$STRATEGY" in
+              trunk)
+                # Trunk-based development
+                if [ "$EVENT" = "pull_request" ]; then
+                  ACTION="plan"
+                  SHOULD_DEPLOY="false"
+                  
+                  if [ "$BRANCH" = "${{ inputs.production_branch }}" ]; then
+                    ENVIRONMENTS="[\"staging\",\"production\"]"
+                  elif [[ "$BRANCH" == "${{ inputs.dev_branch_pattern }}" ]]; then
+                    ENVIRONMENTS="[\"dev\"]"
+                  fi
+                elif [ "$EVENT" = "push" ]; then
+                  ACTION="deploy"
+                  SHOULD_DEPLOY="true"
+                  
+                  if [ "$BRANCH" = "${{ inputs.production_branch }}" ]; then
+                    ENVIRONMENTS="[\"staging\",\"production\"]"
+                  elif [[ "$BRANCH" == "${{ inputs.dev_branch_pattern }}" ]]; then
+                    ENVIRONMENTS="[\"dev\"]"
+                  fi
+                fi
+                ;;
+                
+              gitflow)
+                # GitFlow strategy
+                if [ "$EVENT" = "pull_request" ]; then
+                  ACTION="plan"
+                  SHOULD_DEPLOY="false"
+                  
+                  if [ "$BRANCH" = "${{ inputs.production_branch }}" ]; then
+                    ENVIRONMENTS="[\"production\"]"
+                  elif [ "$BRANCH" = "${{ inputs.staging_branch }}" ]; then
+                    ENVIRONMENTS="[\"staging\"]"
+                  elif [[ "$BRANCH" == "${{ inputs.dev_branch_pattern }}" ]]; then
+                    ENVIRONMENTS="[\"dev\"]"
+                  fi
+                elif [ "$EVENT" = "push" ]; then
+                  ACTION="deploy"
+                  SHOULD_DEPLOY="true"
+                  
+                  if [ "$BRANCH" = "${{ inputs.production_branch }}" ]; then
+                    ENVIRONMENTS="[\"production\"]"
+                  elif [ "$BRANCH" = "${{ inputs.staging_branch }}" ]; then
+                    ENVIRONMENTS="[\"staging\"]"
+                  elif [[ "$BRANCH" == "${{ inputs.dev_branch_pattern }}" ]]; then
+                    ENVIRONMENTS="[\"dev\"]"
+                  fi
+                fi
+                ;;
+                
+              github-flow)
+                # GitHub Flow (main branch only)
+                if [ "$EVENT" = "pull_request" ]; then
+                  ACTION="plan"
+                  SHOULD_DEPLOY="false"
+                  
+                  if [ "$BRANCH" = "${{ inputs.production_branch }}" ]; then
+                    ENVIRONMENTS="[\"production\"]"
+                  fi
+                elif [ "$EVENT" = "push" ]; then
+                  ACTION="deploy"
+                  SHOULD_DEPLOY="true"
+                  
+                  if [ "$BRANCH" = "${{ inputs.production_branch }}" ]; then
+                    ENVIRONMENTS="[\"production\"]"
+                  fi
+                fi
+                ;;
+                
+              custom)
+                # Custom routing using JSON input
+                echo "Using custom routing configuration"
+                
+                # Parse custom routing JSON
+                # Expected format: {"branch_name": {"event": {"environments": ["env1"], "action": "deploy"}}}
+                CUSTOM_JSON='${{ inputs.custom_routing }}'
+                
+                if [ -n "$CUSTOM_JSON" ] && [ "$CUSTOM_JSON" != "{}" ]; then
+                  # Use jq to parse custom routing
+                  ENVIRONMENTS=$(echo "$CUSTOM_JSON" | jq -r --arg branch "$BRANCH" --arg event "$EVENT" '.[$branch][$event].environments // [] | @json')
+                  ACTION=$(echo "$CUSTOM_JSON" | jq -r --arg branch "$BRANCH" --arg event "$EVENT" '.[$branch][$event].action // "deploy"')
+                  
+                  if [ "$ENVIRONMENTS" != "[]" ]; then
+                    SHOULD_DEPLOY="true"
+                  fi
+                fi
+                ;;
+                
+              *)
+                echo "Unknown deployment strategy: ${STRATEGY}"
+                exit 1
+                ;;
+            esac
+          fi
+          
+          # Set outputs
+          echo "environments=${ENVIRONMENTS}" >> $GITHUB_OUTPUT
+          echo "action=${ACTION}" >> $GITHUB_OUTPUT
+          echo "should_deploy=${SHOULD_DEPLOY}" >> $GITHUB_OUTPUT
+          
+          # Summary
+          echo "## 🎯 Deployment Routing" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Strategy**: ${STRATEGY}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Event**: ${EVENT}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${BRANCH}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environments**: ${ENVIRONMENTS}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Action**: ${ACTION}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Should Deploy**: ${SHOULD_DEPLOY}" >> $GITHUB_STEP_SUMMARY
+

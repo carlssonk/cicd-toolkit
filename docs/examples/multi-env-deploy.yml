@@ -1,0 +1,177 @@
+# Example: Multi-Environment Deployment Pipeline
+
+name: Multi-Environment Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # Build once, deploy everywhere
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build
+        run: npm run build
+      
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: dist/
+          retention-days: 1
+
+  # Deploy to staging
+  deploy-staging:
+    needs: build
+    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    with:
+      environment: staging
+      aws_region: us-east-1
+      aws_role_arn: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID_STAGING }}:role/github-actions-role
+      s3_bucket: ${{ vars.S3_BUCKET_STAGING }}
+      build_command: echo "Using pre-built artifact"
+      build_output_dir: dist
+      enable_cloudfront_invalidation: true
+      cloudfront_distribution_id: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_STAGING }}
+    permissions:
+      id-token: write
+      contents: read
+
+  # Run smoke tests on staging
+  smoke-test-staging:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests against staging..."
+          # Add your smoke test commands here
+          # npm run test:smoke -- --url https://staging.example.com
+
+  # Manual approval for production
+  approve-production:
+    needs: [deploy-staging, smoke-test-staging]
+    runs-on: ubuntu-latest
+    environment:
+      name: production-approval
+    steps:
+      - name: Wait for approval
+        run: echo "Production deployment approved"
+
+  # Deploy to production (US East)
+  deploy-production-us-east:
+    needs: approve-production
+    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    with:
+      environment: production-us-east-1
+      aws_region: us-east-1
+      aws_role_arn: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID_PRODUCTION }}:role/github-actions-role
+      s3_bucket: ${{ vars.S3_BUCKET_PRODUCTION_US_EAST }}
+      build_command: echo "Using pre-built artifact"
+      build_output_dir: dist
+      enable_cloudfront_invalidation: true
+      cloudfront_distribution_id: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_US_EAST }}
+    permissions:
+      id-token: write
+      contents: read
+
+  # Deploy to production (EU West)
+  deploy-production-eu-west:
+    needs: approve-production
+    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    with:
+      environment: production-eu-west-1
+      aws_region: eu-west-1
+      aws_role_arn: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID_PRODUCTION }}:role/github-actions-role-eu
+      s3_bucket: ${{ vars.S3_BUCKET_PRODUCTION_EU_WEST }}
+      build_command: echo "Using pre-built artifact"
+      build_output_dir: dist
+      enable_cloudfront_invalidation: true
+      cloudfront_distribution_id: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_EU_WEST }}
+    permissions:
+      id-token: write
+      contents: read
+
+  # Deploy to production (AP Southeast)
+  deploy-production-ap-southeast:
+    needs: approve-production
+    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    with:
+      environment: production-ap-southeast-1
+      aws_region: ap-southeast-1
+      aws_role_arn: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID_PRODUCTION }}:role/github-actions-role-ap
+      s3_bucket: ${{ vars.S3_BUCKET_PRODUCTION_AP_SOUTHEAST }}
+      build_command: echo "Using pre-built artifact"
+      build_output_dir: dist
+      enable_cloudfront_invalidation: true
+      cloudfront_distribution_id: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_AP_SOUTHEAST }}
+    permissions:
+      id-token: write
+      contents: read
+
+  # Create release after all production deployments
+  create-release:
+    needs: [
+      deploy-production-us-east,
+      deploy-production-eu-west,
+      deploy-production-ap-southeast
+    ]
+    if: |
+      needs.deploy-production-us-east.result == 'success' &&
+      needs.deploy-production-eu-west.result == 'success' &&
+      needs.deploy-production-ap-southeast.result == 'success'
+    uses: your-org/github-workflows-library/.github/workflows/create-release.yml@v1
+    with:
+      environment: production
+      commit_hash: ${{ needs.deploy-production-us-east.outputs.commit_hash }}
+      generate_changelog: true
+    permissions:
+      contents: write
+
+  # Notify on completion
+  notify:
+    needs: [
+      deploy-staging,
+      deploy-production-us-east,
+      deploy-production-eu-west,
+      deploy-production-ap-southeast,
+      create-release
+    ]
+    if: always()
+    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    with:
+      notification_type: slack
+      status: ${{
+        needs.deploy-production-us-east.result == 'success' &&
+        needs.deploy-production-eu-west.result == 'success' &&
+        needs.deploy-production-ap-southeast.result == 'success' &&
+        'success' || 'failure'
+      }}
+      title: "Multi-Region Deployment"
+      message: |
+        Deployed to all regions:
+        - US East: ${{ needs.deploy-production-us-east.result }}
+        - EU West: ${{ needs.deploy-production-eu-west.result }}
+        - AP Southeast: ${{ needs.deploy-production-ap-southeast.result }}
+      environment: production
+      commit_hash: ${{ needs.deploy-production-us-east.outputs.commit_hash }}
+      deployment_url: ${{ needs.create-release.outputs.release_url }}
+      mention_on_failure: "@channel"
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+

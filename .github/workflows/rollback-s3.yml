@@ -1,0 +1,257 @@
+name: Rollback S3 Deployment (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Environment name (e.g., staging, production)"
+        required: true
+        type: string
+      aws_region:
+        description: "AWS region"
+        required: true
+        type: string
+      aws_role_arn:
+        description: "AWS IAM role ARN for OIDC authentication"
+        required: true
+        type: string
+      s3_bucket:
+        description: "S3 bucket name"
+        required: true
+        type: string
+      target_commit_hash:
+        description: "Specific commit hash to rollback to (leave empty to rollback to previous release)"
+        required: false
+        type: string
+        default: ""
+      cache_control_mutable:
+        description: "Cache-Control header for main path files"
+        required: false
+        type: string
+        default: "public, max-age=300"
+      enable_cloudfront_invalidation:
+        description: "Enable CloudFront cache invalidation after rollback"
+        required: false
+        type: boolean
+        default: false
+      cloudfront_distribution_id:
+        description: "CloudFront distribution ID (required if enable_cloudfront_invalidation is true)"
+        required: false
+        type: string
+        default: ""
+      s3_additional_args:
+        description: "Additional arguments to pass to aws s3 sync command"
+        required: false
+        type: string
+        default: ""
+    outputs:
+      target_commit_hash:
+        description: "The commit hash that was rolled back to"
+        value: ${{ jobs.rollback.outputs.target_hash }}
+      previous_commit_hash:
+        description: "The commit hash that was rolled back from"
+        value: ${{ jobs.rollback.outputs.previous_hash }}
+      rollback_mode:
+        description: "Rollback mode (auto or manual)"
+        value: ${{ jobs.rollback.outputs.mode }}
+
+jobs:
+  rollback:
+    name: Rollback ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: s3-rollback-${{ inputs.environment }}-${{ inputs.s3_bucket }}
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      target_hash: ${{ steps.target.outputs.hash }}
+      previous_hash: ${{ steps.current_state.outputs.current }}
+      mode: ${{ steps.target.outputs.mode }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Need full history to validate commit hashes
+
+    - name: Configure AWS Credentials (OIDC)
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws_role_arn }}
+        aws-region: ${{ inputs.aws_region }}
+
+    - name: Determine target commit hash
+      id: target
+      run: |
+        BUCKET="${{ inputs.s3_bucket }}"
+        MANUAL_HASH="${{ inputs.target_commit_hash }}"
+        
+        if [[ -n "$MANUAL_HASH" ]]; then
+          echo "Manual commit hash provided: ${MANUAL_HASH}"
+          
+          # Validate and normalize the commit hash
+          FULL_HASH=$(git rev-parse --verify "${MANUAL_HASH}" 2>/dev/null || echo "")
+          
+          if [[ -z "$FULL_HASH" ]]; then
+            echo "❌ Error: Invalid commit hash '${MANUAL_HASH}'"
+            echo "Commit not found in git history"
+            exit 1
+          fi
+          
+          TARGET_HASH="${FULL_HASH:0:8}"
+          echo "Resolved to short hash: ${TARGET_HASH}"
+          echo "hash=${TARGET_HASH}" >> $GITHUB_OUTPUT
+          echo "mode=manual" >> $GITHUB_OUTPUT
+        else
+          echo "No manual hash provided, rolling back to previous release..."
+          
+          # Get current commit hash from S3
+          CURRENT_HASH=$(aws s3api head-object \
+            --bucket "${BUCKET}" \
+            --key "main/index.html" \
+            --query 'Metadata."commit-hash-short"' \
+            --output text 2>/dev/null || echo "")
+          
+          if [[ -z "$CURRENT_HASH" || "$CURRENT_HASH" == "None" ]]; then
+            echo "❌ Error: Could not determine current commit hash from S3 metadata"
+            exit 1
+          fi
+          
+          echo "Current commit: ${CURRENT_HASH}"
+          
+          # Get previous commit hash from metadata
+          PREVIOUS_HASH=$(aws s3api head-object \
+            --bucket "${BUCKET}" \
+            --key "main/index.html" \
+            --query 'Metadata."prev-commit-hash-short"' \
+            --output text 2>/dev/null || echo "")
+          
+          if [[ -z "$PREVIOUS_HASH" || "$PREVIOUS_HASH" == "None" ]]; then
+            echo "❌ Error: No previous commit hash found in metadata"
+            echo "This might be the first deployment, or the deployment was made before prev-commit-hash-short tracking was added"
+            echo ""
+            echo "Available versions in S3:"
+            aws s3 ls "s3://${BUCKET}/" | grep "PRE" | awk '{print $2}' | sed 's/\///' | grep -E '^[a-f0-9]{8}$' || echo "No versions found"
+            exit 1
+          fi
+          
+          echo "Previous commit: ${PREVIOUS_HASH}"
+          TARGET_HASH="$PREVIOUS_HASH"
+          echo "hash=${TARGET_HASH}" >> $GITHUB_OUTPUT
+          echo "current=${CURRENT_HASH}" >> $GITHUB_OUTPUT
+          echo "mode=auto" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Verify target commit exists in S3
+      run: |
+        BUCKET="${{ inputs.s3_bucket }}"
+        TARGET_HASH="${{ steps.target.outputs.hash }}"
+        
+        echo "Checking if commit ${TARGET_HASH} exists in bucket ${BUCKET}..."
+        
+        if aws s3 ls "s3://${BUCKET}/${TARGET_HASH}/" --max-items 1 | grep -q .; then
+          echo "✅ Commit ${TARGET_HASH} found in S3"
+        else
+          echo "❌ Commit ${TARGET_HASH} not found in S3"
+          echo "This commit was never deployed. Available versions:"
+          aws s3 ls "s3://${BUCKET}/" | grep "PRE" | awk '{print $2}' | sed 's/\///' | grep -E '^[a-f0-9]{8}$' || echo "No versions found"
+          exit 1
+        fi
+
+    - name: Get current state for metadata
+      id: current_state
+      run: |
+        BUCKET="${{ inputs.s3_bucket }}"
+        
+        # Get current commit hash (might be different from target if manual rollback)
+        CURRENT_HASH=$(aws s3api head-object \
+          --bucket "${BUCKET}" \
+          --key "main/index.html" \
+          --query 'Metadata."commit-hash-short"' \
+          --output text 2>/dev/null || echo "")
+        
+        if [[ -n "$CURRENT_HASH" && "$CURRENT_HASH" != "None" ]]; then
+          echo "current=${CURRENT_HASH}" >> $GITHUB_OUTPUT
+        else
+          echo "current=unknown" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Rollback main path
+      run: |
+        BUCKET="${{ inputs.s3_bucket }}"
+        TARGET_HASH="${{ steps.target.outputs.hash }}"
+        CURRENT_HASH="${{ steps.current_state.outputs.current }}"
+        TIMESTAMP=$(date -u +%Y%m%d-%H%M%S)
+        
+        echo "Rolling back ${BUCKET}/main/ to commit ${TARGET_HASH}..."
+        
+        # Build metadata
+        METADATA="deployed-at=${TIMESTAMP},commit-hash-short=${TARGET_HASH},environment=${{ inputs.environment }}"
+        
+        # Add prev-commit-hash-short (the current one we're rolling back from)
+        if [[ -n "$CURRENT_HASH" && "$CURRENT_HASH" != "unknown" ]]; then
+          METADATA="${METADATA},prev-commit-hash-short=${CURRENT_HASH}"
+        fi
+        
+        # Add rollback tracking
+        METADATA="${METADATA},rolled-back-from=${CURRENT_HASH},rollback-by=${{ github.actor }}"
+        
+        aws s3 sync "s3://${BUCKET}/${TARGET_HASH}/" "s3://${BUCKET}/main/" \
+          --cache-control "${{ inputs.cache_control_mutable }}" \
+          --metadata "${METADATA}" \
+          --delete \
+          ${{ inputs.s3_additional_args }}
+        
+        echo "✅ Rollback complete!"
+        echo "Main path now points to commit: ${TARGET_HASH}"
+
+    - name: Invalidate CloudFront cache
+      if: inputs.enable_cloudfront_invalidation == true
+      run: |
+        if [ -z "${{ inputs.cloudfront_distribution_id }}" ]; then
+          echo "❌ Error: cloudfront_distribution_id is required when enable_cloudfront_invalidation is true"
+          exit 1
+        fi
+        
+        echo "Invalidating CloudFront distribution: ${{ inputs.cloudfront_distribution_id }}"
+        
+        aws cloudfront create-invalidation \
+          --distribution-id "${{ inputs.cloudfront_distribution_id }}" \
+          --paths "/main/*" "/*"
+        
+        echo "✅ CloudFront invalidation initiated"
+
+    - name: Rollback Summary
+      run: |
+        MODE="${{ steps.target.outputs.mode }}"
+        TARGET="${{ steps.target.outputs.hash }}"
+        CURRENT="${{ steps.current_state.outputs.current }}"
+        
+        echo "## 🔄 Rollback Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment**: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "$MODE" == "manual" ]]; then
+          echo "- **Rollback type**: Manual (specific commit)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target commit**: \`${TARGET}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Rolled back from**: \`${CURRENT}\`" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Rollback type**: Automatic (previous release)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Rolled back from**: \`${CURRENT}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Rolled back to**: \`${TARGET}\`" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "- **Performed by**: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Timestamp**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "The \`main\` path has been updated to serve commit \`${TARGET}\`." >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ inputs.enable_cloudfront_invalidation }}" = "true" ]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ☁️ CloudFront" >> $GITHUB_STEP_SUMMARY
+          echo "- Cache invalidation initiated for distribution \`${{ inputs.cloudfront_distribution_id }}\`" >> $GITHUB_STEP_SUMMARY
+        fi
+

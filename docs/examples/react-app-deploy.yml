@@ -1,0 +1,135 @@
+# Example: React App Deployment with S3
+
+name: Deploy React App
+
+on:
+  push:
+    branches: [main, dev/*]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        description: "Environment to deploy"
+        options:
+          - dev
+          - staging
+          - production
+
+jobs:
+  # Determine deployment strategy
+  route:
+    uses: your-org/github-workflows-library/.github/workflows/deployment-router.yml@v1
+    with:
+      event_name: ${{ github.event_name }}
+      branch: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+      workflow_dispatch_environment: ${{ github.event.inputs.environment }}
+      deployment_strategy: trunk
+
+  # Deploy to dev environment
+  deploy-dev:
+    needs: route
+    if: |
+      needs.route.outputs.should_deploy == 'true' &&
+      contains(fromJson(needs.route.outputs.environments), 'dev')
+    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    with:
+      environment: dev
+      aws_region: ${{ vars.AWS_REGION }}
+      aws_role_arn: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID_DEV }}:role/github-actions-role
+      s3_bucket: ${{ vars.S3_BUCKET_DEV }}
+      build_command: npm run build
+      build_output_dir: dist
+      node_version: "20"
+      package_manager: npm
+    permissions:
+      id-token: write
+      contents: read
+
+  # Deploy to staging environment
+  deploy-staging:
+    needs: route
+    if: |
+      needs.route.outputs.should_deploy == 'true' &&
+      contains(fromJson(needs.route.outputs.environments), 'staging')
+    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    with:
+      environment: staging
+      aws_region: ${{ vars.AWS_REGION }}
+      aws_role_arn: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID_STAGING }}:role/github-actions-role
+      s3_bucket: ${{ vars.S3_BUCKET_STAGING }}
+      build_command: npm run build
+      build_output_dir: dist
+      node_version: "20"
+      package_manager: npm
+      enable_cloudfront_invalidation: true
+      cloudfront_distribution_id: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_STAGING }}
+    permissions:
+      id-token: write
+      contents: read
+
+  # Deploy to production environment
+  deploy-production:
+    needs: [route, deploy-staging]
+    if: |
+      needs.route.outputs.should_deploy == 'true' &&
+      contains(fromJson(needs.route.outputs.environments), 'production')
+    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    with:
+      environment: production
+      aws_region: ${{ vars.AWS_REGION }}
+      aws_role_arn: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID_PRODUCTION }}:role/github-actions-role
+      s3_bucket: ${{ vars.S3_BUCKET_PRODUCTION }}
+      build_command: npm run build
+      build_output_dir: dist
+      node_version: "20"
+      package_manager: npm
+      enable_cloudfront_invalidation: true
+      cloudfront_distribution_id: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_PRODUCTION }}
+    permissions:
+      id-token: write
+      contents: read
+
+  # Create release tag for production
+  create-release:
+    needs: deploy-production
+    if: needs.deploy-production.result == 'success'
+    uses: your-org/github-workflows-library/.github/workflows/create-release.yml@v1
+    with:
+      environment: production
+      commit_hash: ${{ needs.deploy-production.outputs.commit_hash }}
+      generate_changelog: true
+    permissions:
+      contents: write
+
+  # Notify on Slack
+  notify:
+    needs: [route, deploy-dev, deploy-staging, deploy-production]
+    if: always() && needs.route.outputs.should_deploy == 'true'
+    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    with:
+      notification_type: slack
+      status: ${{ 
+        needs.deploy-production.result == 'success' && 'success' ||
+        needs.deploy-production.result == 'failure' && 'failure' ||
+        needs.deploy-staging.result == 'success' && 'success' ||
+        needs.deploy-staging.result == 'failure' && 'failure' ||
+        needs.deploy-dev.result == 'success' && 'success' ||
+        'failure'
+      }}
+      title: "React App Deployment"
+      environment: ${{
+        contains(fromJson(needs.route.outputs.environments), 'production') && 'production' ||
+        contains(fromJson(needs.route.outputs.environments), 'staging') && 'staging' ||
+        'dev'
+      }}
+      commit_hash: ${{
+        needs.deploy-production.outputs.commit_hash ||
+        needs.deploy-staging.outputs.commit_hash ||
+        needs.deploy-dev.outputs.commit_hash
+      }}
+      mention_on_failure: "@channel"
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+

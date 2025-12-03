@@ -1,0 +1,92 @@
+# Example: Rollback Workflow
+
+name: Rollback App
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        description: "Environment to rollback"
+        required: true
+        options:
+          - staging
+          - production
+      commit_hash:
+        type: string
+        description: "Optional: Specific commit hash to rollback to (leave empty for automatic rollback)"
+        required: false
+
+jobs:
+  # Perform the rollback
+  rollback:
+    uses: your-org/github-workflows-library/.github/workflows/rollback-s3.yml@v1
+    with:
+      environment: ${{ inputs.environment }}
+      aws_region: ${{ vars.AWS_REGION }}
+      aws_role_arn: arn:aws:iam::${{ vars[format('AWS_ACCOUNT_ID_{0}', upper(inputs.environment))] }}:role/github-actions-role
+      s3_bucket: ${{ vars[format('S3_BUCKET_{0}', upper(inputs.environment))] }}
+      target_commit_hash: ${{ inputs.commit_hash }}
+      enable_cloudfront_invalidation: true
+      cloudfront_distribution_id: ${{ vars[format('CLOUDFRONT_DISTRIBUTION_ID_{0}', upper(inputs.environment))] }}
+    permissions:
+      id-token: write
+      contents: read
+
+  # Create a release tag for the rollback
+  create-release-tag:
+    needs: rollback
+    if: needs.rollback.result == 'success'
+    uses: your-org/github-workflows-library/.github/workflows/create-release.yml@v1
+    with:
+      environment: ${{ inputs.environment }}
+      commit_hash: ${{ needs.rollback.outputs.target_commit_hash }}
+      tag_prefix: rollback
+      generate_changelog: false
+    permissions:
+      contents: write
+
+  # Notify team about the rollback
+  notify-slack:
+    needs: rollback
+    if: always()
+    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    with:
+      notification_type: slack
+      status: ${{ needs.rollback.result }}
+      title: "🔄 Rollback ${{ inputs.environment }}"
+      message: ${{
+        needs.rollback.result == 'success' &&
+        format('Rolled back from {0} to {1}', needs.rollback.outputs.previous_commit_hash, needs.rollback.outputs.target_commit_hash) ||
+        'Rollback failed. Please check the logs.'
+      }}
+      environment: ${{ inputs.environment }}
+      commit_hash: ${{ needs.rollback.outputs.target_commit_hash }}
+      mention_on_failure: "@channel"
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Create a GitHub Discussion for production rollbacks
+  notify-discussion:
+    needs: rollback
+    if: needs.rollback.result == 'success' && inputs.environment == 'production'
+    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    with:
+      notification_type: github-discussion
+      status: warning
+      title: "Production Rollback Performed"
+      message: |
+        A production rollback was performed by @${{ github.actor }}.
+        
+        **Rollback Details:**
+        - From: `${{ needs.rollback.outputs.previous_commit_hash }}`
+        - To: `${{ needs.rollback.outputs.target_commit_hash }}`
+        - Mode: ${{ needs.rollback.outputs.rollback_mode }}
+        
+        Please investigate the reason for the rollback and document any findings.
+      environment: production
+      commit_hash: ${{ needs.rollback.outputs.target_commit_hash }}
+      github_discussion_category: "Incidents"
+    permissions:
+      discussions: write
+

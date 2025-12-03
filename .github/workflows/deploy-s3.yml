@@ -1,0 +1,283 @@
+name: Deploy to S3 with Versioning (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Environment name (e.g., dev, staging, production)"
+        required: true
+        type: string
+      aws_region:
+        description: "AWS region"
+        required: true
+        type: string
+      aws_role_arn:
+        description: "AWS IAM role ARN for OIDC authentication"
+        required: true
+        type: string
+      s3_bucket:
+        description: "S3 bucket name for deployment"
+        required: true
+        type: string
+      build_command:
+        description: "Command to build the application"
+        required: true
+        type: string
+      build_output_dir:
+        description: "Directory containing build output (e.g., dist, build)"
+        required: true
+        type: string
+      node_version:
+        description: "Node.js version to use"
+        required: false
+        type: string
+        default: "20"
+      package_manager:
+        description: "Package manager to use (npm, yarn, pnpm)"
+        required: false
+        type: string
+        default: "npm"
+      package_manager_version:
+        description: "Package manager version (only for pnpm)"
+        required: false
+        type: string
+        default: ""
+      install_command:
+        description: "Command to install dependencies (auto-detected if not provided)"
+        required: false
+        type: string
+        default: ""
+      cache_control_immutable:
+        description: "Cache-Control header for versioned (immutable) files"
+        required: false
+        type: string
+        default: "public, max-age=31536000, immutable"
+      cache_control_mutable:
+        description: "Cache-Control header for main path (mutable) files"
+        required: false
+        type: string
+        default: "public, max-age=300"
+      commit_hash_length:
+        description: "Length of commit hash to use for versioning"
+        required: false
+        type: number
+        default: 8
+      enable_cloudfront_invalidation:
+        description: "Enable CloudFront cache invalidation after deployment"
+        required: false
+        type: boolean
+        default: false
+      cloudfront_distribution_id:
+        description: "CloudFront distribution ID (required if enable_cloudfront_invalidation is true)"
+        required: false
+        type: string
+        default: ""
+      s3_additional_args:
+        description: "Additional arguments to pass to aws s3 sync command"
+        required: false
+        type: string
+        default: ""
+    outputs:
+      commit_hash:
+        description: "The commit hash that was deployed"
+        value: ${{ jobs.deploy.outputs.commit_hash }}
+      previous_commit_hash:
+        description: "The previous commit hash (before this deployment)"
+        value: ${{ jobs.deploy.outputs.previous_commit_hash }}
+      deployment_timestamp:
+        description: "Timestamp of the deployment"
+        value: ${{ jobs.deploy.outputs.deployment_timestamp }}
+      s3_versioned_url:
+        description: "S3 URL for the versioned deployment"
+        value: ${{ jobs.deploy.outputs.s3_versioned_url }}
+      s3_main_url:
+        description: "S3 URL for the main deployment"
+        value: ${{ jobs.deploy.outputs.s3_main_url }}
+
+jobs:
+  deploy:
+    name: Deploy to S3 - ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: s3-deploy-${{ inputs.environment }}-${{ inputs.s3_bucket }}
+      cancel-in-progress: false
+    outputs:
+      commit_hash: ${{ steps.current.outputs.hash }}
+      previous_commit_hash: ${{ steps.previous.outputs.hash }}
+      deployment_timestamp: ${{ steps.current.outputs.timestamp }}
+      s3_versioned_url: ${{ steps.urls.outputs.versioned }}
+      s3_main_url: ${{ steps.urls.outputs.main }}
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Configure AWS Credentials (OIDC)
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws_role_arn }}
+        aws-region: ${{ inputs.aws_region }}
+
+    - name: Setup pnpm
+      if: inputs.package_manager == 'pnpm'
+      uses: pnpm/action-setup@v4
+      with:
+        version: ${{ inputs.package_manager_version || '10' }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node_version }}
+        cache: ${{ inputs.package_manager }}
+
+    - name: Install dependencies
+      run: |
+        if [ -n "${{ inputs.install_command }}" ]; then
+          ${{ inputs.install_command }}
+        else
+          case "${{ inputs.package_manager }}" in
+            npm)
+              npm ci
+              ;;
+            yarn)
+              yarn install --frozen-lockfile
+              ;;
+            pnpm)
+              pnpm install --frozen-lockfile
+              ;;
+            *)
+              echo "Unknown package manager: ${{ inputs.package_manager }}"
+              exit 1
+              ;;
+          esac
+        fi
+
+    - name: Build
+      run: ${{ inputs.build_command }}
+
+    - name: Verify build output
+      run: |
+        if [ ! -d "${{ inputs.build_output_dir }}" ]; then
+          echo "❌ Error: Build output directory '${{ inputs.build_output_dir }}' does not exist"
+          exit 1
+        fi
+        
+        FILE_COUNT=$(find "${{ inputs.build_output_dir }}" -type f | wc -l)
+        if [ "$FILE_COUNT" -eq 0 ]; then
+          echo "❌ Error: Build output directory is empty"
+          exit 1
+        fi
+        
+        echo "✅ Build output verified: $FILE_COUNT files in ${{ inputs.build_output_dir }}"
+
+    - name: Get commit hash and timestamp
+      id: current
+      run: |
+        HASH=$(git rev-parse --short=${{ inputs.commit_hash_length }} HEAD)
+        TIMESTAMP=$(date -u +%Y%m%d-%H%M%S)
+        echo "hash=${HASH}" >> $GITHUB_OUTPUT
+        echo "timestamp=${TIMESTAMP}" >> $GITHUB_OUTPUT
+        echo "Commit: ${HASH}"
+        echo "Timestamp: ${TIMESTAMP}"
+
+    - name: Get previous commit hash from S3
+      id: previous
+      run: |
+        # Get the current commit hash before we deploy the new one
+        PREVIOUS_HASH=$(aws s3api head-object \
+          --bucket "${{ inputs.s3_bucket }}" \
+          --key "main/index.html" \
+          --query 'Metadata."commit-hash-short"' \
+          --output text 2>/dev/null || echo "")
+        
+        if [[ -n "$PREVIOUS_HASH" && "$PREVIOUS_HASH" != "None" ]]; then
+          echo "Previous commit: ${PREVIOUS_HASH}"
+          echo "hash=${PREVIOUS_HASH}" >> $GITHUB_OUTPUT
+        else
+          echo "No previous commit found (first deployment?)"
+          echo "hash=" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Deploy versioned path to S3
+      run: |
+        COMMIT_HASH="${{ steps.current.outputs.hash }}"
+        
+        echo "Deploying versioned path: s3://${{ inputs.s3_bucket }}/${COMMIT_HASH}/"
+        
+        # Upload versioned path (immutable, long cache)
+        aws s3 sync "${{ inputs.build_output_dir }}/" "s3://${{ inputs.s3_bucket }}/${COMMIT_HASH}/" \
+          --cache-control "${{ inputs.cache_control_immutable }}" \
+          --metadata "deployed-at=${{ steps.current.outputs.timestamp }},commit-hash-short=${COMMIT_HASH},environment=${{ inputs.environment }}" \
+          ${{ inputs.s3_additional_args }}
+        
+        echo "✅ Versioned deployment complete"
+
+    - name: Deploy main path to S3
+      run: |
+        COMMIT_HASH="${{ steps.current.outputs.hash }}"
+        PREVIOUS_HASH="${{ steps.previous.outputs.hash }}"
+        
+        echo "Deploying main path: s3://${{ inputs.s3_bucket }}/main/"
+        
+        # Build metadata for main path
+        METADATA="deployed-at=${{ steps.current.outputs.timestamp }},commit-hash-short=${COMMIT_HASH},environment=${{ inputs.environment }}"
+        if [[ -n "$PREVIOUS_HASH" ]]; then
+          METADATA="${METADATA},prev-commit-hash-short=${PREVIOUS_HASH}"
+        fi
+        
+        # Upload main path (mutable, short cache)
+        aws s3 sync "${{ inputs.build_output_dir }}/" "s3://${{ inputs.s3_bucket }}/main/" \
+          --cache-control "${{ inputs.cache_control_mutable }}" \
+          --metadata "${METADATA}" \
+          --delete \
+          ${{ inputs.s3_additional_args }}
+        
+        echo "✅ Main path deployment complete"
+
+    - name: Set output URLs
+      id: urls
+      run: |
+        COMMIT_HASH="${{ steps.current.outputs.hash }}"
+        echo "versioned=s3://${{ inputs.s3_bucket }}/${COMMIT_HASH}/" >> $GITHUB_OUTPUT
+        echo "main=s3://${{ inputs.s3_bucket }}/main/" >> $GITHUB_OUTPUT
+
+    - name: Invalidate CloudFront cache
+      if: inputs.enable_cloudfront_invalidation == true
+      run: |
+        if [ -z "${{ inputs.cloudfront_distribution_id }}" ]; then
+          echo "❌ Error: cloudfront_distribution_id is required when enable_cloudfront_invalidation is true"
+          exit 1
+        fi
+        
+        echo "Invalidating CloudFront distribution: ${{ inputs.cloudfront_distribution_id }}"
+        
+        aws cloudfront create-invalidation \
+          --distribution-id "${{ inputs.cloudfront_distribution_id }}" \
+          --paths "/main/*" "/*"
+        
+        echo "✅ CloudFront invalidation initiated"
+
+    - name: Deployment Summary
+      run: |
+        echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment**: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit**: \`${{ steps.current.outputs.hash }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Previous Commit**: \`${{ steps.previous.outputs.hash || 'N/A (first deployment)' }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Timestamp**: ${{ steps.current.outputs.timestamp }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **S3 Bucket**: \`${{ inputs.s3_bucket }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📦 Deployment Paths" >> $GITHUB_STEP_SUMMARY
+        echo "- **Versioned**: \`s3://${{ inputs.s3_bucket }}/${{ steps.current.outputs.hash }}/\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Main**: \`s3://${{ inputs.s3_bucket }}/main/\`" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ inputs.enable_cloudfront_invalidation }}" = "true" ]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ☁️ CloudFront" >> $GITHUB_STEP_SUMMARY
+          echo "- Cache invalidation initiated for distribution \`${{ inputs.cloudfront_distribution_id }}\`" >> $GITHUB_STEP_SUMMARY
+        fi
+
