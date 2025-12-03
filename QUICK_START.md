@@ -100,7 +100,7 @@ on:
 
 jobs:
   deploy:
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: production
       aws_region: ${{ vars.AWS_REGION }}
@@ -141,7 +141,7 @@ on:
 
 jobs:
   rollback:
-    uses: your-org/github-workflows-library/.github/workflows/rollback-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/rollback-s3.yml@v1
     with:
       environment: ${{ inputs.environment }}
       aws_region: ${{ vars.AWS_REGION }}
@@ -164,7 +164,7 @@ jobs:
   notify:
     needs: deploy
     if: always()
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: slack
       status: ${{ needs.deploy.result }}
@@ -195,7 +195,7 @@ aws s3api head-object \
 
 ## 🎯 Next Steps
 
-- [Add CloudFront](./docs/deploy-to-s3.md#cloudfront-integration)
+- [Add CloudFront](./docs/deploy-s3.md#cloudfront-integration)
 - [Set up multi-environment deployment](./docs/examples/multi-env-deploy.yml)
 - [Configure deployment routing](./docs/deployment-router.md)
 - [Add release tagging](./docs/create-release.md)
@@ -228,5 +228,5 @@ aws s3api head-object \
 
 ---
 
-Need help? [Open a discussion](https://github.com/your-org/github-workflows-library/discussions)
+Need help? [Open a discussion](https://github.com/carlssonk/cicd-toolkit/discussions)
 

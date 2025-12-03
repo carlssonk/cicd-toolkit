@@ -29,7 +29,7 @@ on:
 
 jobs:
   rollback:
-    uses: your-org/github-workflows-library/.github/workflows/rollback-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/rollback-s3.yml@v1
     with:
       environment: ${{ inputs.environment }}
       aws_region: us-east-1
@@ -59,7 +59,7 @@ on:
 
 jobs:
   rollback:
-    uses: your-org/github-workflows-library/.github/workflows/rollback-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/rollback-s3.yml@v1
     with:
       environment: ${{ inputs.environment }}
       aws_region: us-east-1
@@ -76,7 +76,7 @@ jobs:
 ```yaml
 jobs:
   rollback:
-    uses: your-org/github-workflows-library/.github/workflows/rollback-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/rollback-s3.yml@v1
     with:
       environment: production
       aws_region: us-east-1
@@ -148,12 +148,12 @@ After rollback, the main path metadata includes:
 
 ### AWS Setup
 
-Same as [Deploy to S3](./deploy-to-s3.md#aws-setup)
+Same as [Deploy to S3](./deploy-s3.md#aws-setup)
 
 ### Deployment Requirements
 
 The rollback workflow requires:
-1. Previous deployment was done using `deploy-to-s3.yml`
+1. Previous deployment was done using `deploy-s3.yml`
 2. Versioned deployments exist in S3 (`s3://bucket/{commit-hash}/`)
 3. Main path has proper metadata
 
@@ -189,7 +189,7 @@ on:
 
 jobs:
   rollback:
-    uses: your-org/github-workflows-library/.github/workflows/rollback-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/rollback-s3.yml@v1
     with:
       environment: ${{ inputs.environment }}
       aws_region: ${{ vars.AWS_REGION }}
@@ -205,7 +205,7 @@ jobs:
   notify:
     needs: rollback
     if: always()
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: slack
       status: ${{ needs.rollback.result }}
@@ -255,7 +255,7 @@ The commit doesn't exist in your git history.
 
 ## Related Workflows
 
-- [Deploy to S3](./deploy-to-s3.md)
+- [Deploy to S3](./deploy-s3.md)
 - [Create Release](./create-release.md)
 - [Send Notification](./notify.md)
 

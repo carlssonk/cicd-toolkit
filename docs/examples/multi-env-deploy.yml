@@ -36,7 +36,7 @@ jobs:
   # Deploy to staging
   deploy-staging:
     needs: build
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: staging
       aws_region: us-east-1
@@ -76,7 +76,7 @@ jobs:
   # Deploy to production (US East)
   deploy-production-us-east:
     needs: approve-production
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: production-us-east-1
       aws_region: us-east-1
@@ -93,7 +93,7 @@ jobs:
   # Deploy to production (EU West)
   deploy-production-eu-west:
     needs: approve-production
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: production-eu-west-1
       aws_region: eu-west-1
@@ -110,7 +110,7 @@ jobs:
   # Deploy to production (AP Southeast)
   deploy-production-ap-southeast:
     needs: approve-production
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: production-ap-southeast-1
       aws_region: ap-southeast-1
@@ -135,7 +135,7 @@ jobs:
       needs.deploy-production-us-east.result == 'success' &&
       needs.deploy-production-eu-west.result == 'success' &&
       needs.deploy-production-ap-southeast.result == 'success'
-    uses: your-org/github-workflows-library/.github/workflows/create-release.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/create-release.yml@v1
     with:
       environment: production
       commit_hash: ${{ needs.deploy-production-us-east.outputs.commit_hash }}
@@ -153,7 +153,7 @@ jobs:
       create-release
     ]
     if: always()
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: slack
       status: ${{

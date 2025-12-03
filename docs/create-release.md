@@ -24,7 +24,7 @@ on:
 
 jobs:
   deploy:
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: production
       # ... other inputs
@@ -34,7 +34,7 @@ jobs:
 
   create-release:
     needs: deploy
-    uses: your-org/github-workflows-library/.github/workflows/create-release.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/create-release.yml@v1
     with:
       environment: production
       commit_hash: ${{ needs.deploy.outputs.commit_hash }}
@@ -47,7 +47,7 @@ jobs:
 ```yaml
 jobs:
   create-release:
-    uses: your-org/github-workflows-library/.github/workflows/create-release.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/create-release.yml@v1
     with:
       environment: production
       commit_hash: ${{ github.sha }}
@@ -63,7 +63,7 @@ jobs:
 ```yaml
 jobs:
   create-release:
-    uses: your-org/github-workflows-library/.github/workflows/create-release.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/create-release.yml@v1
     with:
       environment: production
       commit_hash: ${{ github.sha }}
@@ -78,7 +78,7 @@ jobs:
 ```yaml
 jobs:
   create-release:
-    uses: your-org/github-workflows-library/.github/workflows/create-release.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/create-release.yml@v1
     with:
       environment: staging
       commit_hash: ${{ github.sha }}
@@ -200,7 +200,7 @@ on:
 
 jobs:
   deploy:
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: production
       aws_region: us-east-1
@@ -215,7 +215,7 @@ jobs:
   create-release:
     needs: deploy
     if: needs.deploy.result == 'success'
-    uses: your-org/github-workflows-library/.github/workflows/create-release.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/create-release.yml@v1
     with:
       environment: production
       commit_hash: ${{ needs.deploy.outputs.commit_hash }}
@@ -226,7 +226,7 @@ jobs:
   notify:
     needs: [deploy, create-release]
     if: always()
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: slack
       status: ${{ needs.deploy.result }}
@@ -243,14 +243,14 @@ jobs:
 ```yaml
 jobs:
   deploy-staging:
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: staging
       # ... other inputs
 
   release-staging:
     needs: deploy-staging
-    uses: your-org/github-workflows-library/.github/workflows/create-release.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/create-release.yml@v1
     with:
       environment: staging
       commit_hash: ${{ needs.deploy-staging.outputs.commit_hash }}
@@ -263,14 +263,14 @@ jobs:
 
   deploy-production:
     needs: deploy-staging
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: production
       # ... other inputs
 
   release-production:
     needs: deploy-production
-    uses: your-org/github-workflows-library/.github/workflows/create-release.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/create-release.yml@v1
     with:
       environment: production
       commit_hash: ${{ needs.deploy-production.outputs.commit_hash }}
@@ -306,7 +306,7 @@ Ensure the workflow has `contents: write` permission.
 
 ## Related Workflows
 
-- [Deploy to S3](./deploy-to-s3.md)
+- [Deploy to S3](./deploy-s3.md)
 - [Rollback S3 Deployment](./rollback-s3.md)
 - [Send Notification](./notify.md)
 

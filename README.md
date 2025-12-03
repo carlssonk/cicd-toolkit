@@ -15,7 +15,7 @@ A collection of production-ready, reusable GitHub Actions workflows for modern a
 
 | Workflow | Description | Documentation |
 |----------|-------------|---------------|
-| **deploy-to-s3.yml** | Deploy applications to S3 with versioning and CloudFront support | [Docs](./docs/deploy-to-s3.md) |
+| **deploy-s3.yml** | Deploy applications to S3 with versioning and CloudFront support | [Docs](./docs/deploy-s3.md) |
 | **rollback-s3.yml** | Rollback S3 deployments to previous versions | [Docs](./docs/rollback-s3.md) |
 | **create-release.yml** | Create release tags and GitHub releases with changelogs | [Docs](./docs/create-release.md) |
 | **deployment-router.yml** | Route deployments based on branching strategy | [Docs](./docs/deployment-router.md) |
@@ -34,7 +34,7 @@ on:
 
 jobs:
   deploy:
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: production
       aws_region: us-east-1
@@ -58,7 +58,7 @@ on:
 
 jobs:
   deploy:
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: production
       aws_region: us-east-1
@@ -75,7 +75,7 @@ jobs:
   create-release:
     needs: deploy
     if: needs.deploy.result == 'success'
-    uses: your-org/github-workflows-library/.github/workflows/create-release.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/create-release.yml@v1
     with:
       environment: production
       commit_hash: ${{ needs.deploy.outputs.commit_hash }}
@@ -86,7 +86,7 @@ jobs:
   notify:
     needs: [deploy, create-release]
     if: always()
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: slack
       status: ${{ needs.deploy.result }}
@@ -112,7 +112,7 @@ on:
 
 jobs:
   rollback:
-    uses: your-org/github-workflows-library/.github/workflows/rollback-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/rollback-s3.yml@v1
     with:
       environment: ${{ inputs.environment }}
       aws_region: us-east-1
@@ -127,7 +127,7 @@ jobs:
 
 ### Workflow Documentation
 
-- [Deploy to S3](./docs/deploy-to-s3.md) - Comprehensive S3 deployment with versioning
+- [Deploy to S3](./docs/deploy-s3.md) - Comprehensive S3 deployment with versioning
 - [Rollback S3](./docs/rollback-s3.md) - Rollback deployments safely
 - [Create Release](./docs/create-release.md) - Automated release management
 - [Deployment Router](./docs/deployment-router.md) - Smart deployment routing
@@ -291,13 +291,13 @@ Always pin workflow versions:
 
 ```yaml
 # ✅ Good - pinned to specific version
-uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1.2.3
+uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1.2.3
 
 # ⚠️ Acceptable - pinned to major version
-uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
 
 # ❌ Bad - uses latest, breaking changes possible
-uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@main
+uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@main
 ```
 
 ### 2. Environment Strategy
@@ -310,7 +310,7 @@ jobs:
     environment:
       name: production
       url: https://app.example.com
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     # ...
 ```
 
@@ -396,8 +396,8 @@ Built with best practices from:
 ## 📞 Support
 
 - 📖 [Documentation](./docs/)
-- 💬 [GitHub Discussions](https://github.com/your-org/github-workflows-library/discussions)
-- 🐛 [Issue Tracker](https://github.com/your-org/github-workflows-library/issues)
+- 💬 [GitHub Discussions](https://github.com/carlssonk/cicd-toolkit/discussions)
+- 🐛 [Issue Tracker](https://github.com/carlssonk/cicd-toolkit/issues)
 
 ---
 

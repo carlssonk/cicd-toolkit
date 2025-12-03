@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Features
 
-#### Deploy to S3 (`deploy-to-s3.yml`)
+#### Deploy to S3 (`deploy-s3.yml`)
 - Versioned deployments with commit hashes
 - Dual-path strategy (versioned + main)
 - Metadata tracking for audit trail
@@ -86,6 +86,6 @@ No breaking changes - this is the initial release.
 
 For questions and support:
 - 📖 [Documentation](./README.md)
-- 💬 [GitHub Discussions](https://github.com/your-org/github-workflows-library/discussions)
-- 🐛 [Issue Tracker](https://github.com/your-org/github-workflows-library/issues)
+- 💬 [GitHub Discussions](https://github.com/carlssonk/cicd-toolkit/discussions)
+- 🐛 [Issue Tracker](https://github.com/carlssonk/cicd-toolkit/issues)
 

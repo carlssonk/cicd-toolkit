@@ -30,7 +30,7 @@ on:
 
 jobs:
   route:
-    uses: your-org/github-workflows-library/.github/workflows/deployment-router.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deployment-router.yml@v1
     with:
       event_name: ${{ github.event_name }}
       branch: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
@@ -42,7 +42,7 @@ jobs:
     strategy:
       matrix:
         environment: ${{ fromJson(needs.route.outputs.environments) }}
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: ${{ matrix.environment }}
       # ... other inputs
@@ -53,7 +53,7 @@ jobs:
 ```yaml
 jobs:
   route:
-    uses: your-org/github-workflows-library/.github/workflows/deployment-router.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deployment-router.yml@v1
     with:
       event_name: ${{ github.event_name }}
       branch: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
@@ -68,7 +68,7 @@ jobs:
 ```yaml
 jobs:
   route:
-    uses: your-org/github-workflows-library/.github/workflows/deployment-router.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deployment-router.yml@v1
     with:
       event_name: ${{ github.event_name }}
       branch: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
@@ -81,7 +81,7 @@ jobs:
 ```yaml
 jobs:
   route:
-    uses: your-org/github-workflows-library/.github/workflows/deployment-router.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deployment-router.yml@v1
     with:
       event_name: ${{ github.event_name }}
       branch: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
@@ -225,7 +225,7 @@ on:
 
 jobs:
   route:
-    uses: your-org/github-workflows-library/.github/workflows/deployment-router.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deployment-router.yml@v1
     with:
       event_name: ${{ github.event_name }}
       branch: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
@@ -236,7 +236,7 @@ jobs:
     if: |
       needs.route.outputs.should_deploy == 'true' &&
       contains(fromJson(needs.route.outputs.environments), 'dev')
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: dev
       # ... other inputs
@@ -246,7 +246,7 @@ jobs:
     if: |
       needs.route.outputs.should_deploy == 'true' &&
       contains(fromJson(needs.route.outputs.environments), 'staging')
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: staging
       # ... other inputs
@@ -256,7 +256,7 @@ jobs:
     if: |
       needs.route.outputs.should_deploy == 'true' &&
       contains(fromJson(needs.route.outputs.environments), 'production')
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: production
       # ... other inputs
@@ -275,7 +275,7 @@ on:
 
 jobs:
   route:
-    uses: your-org/github-workflows-library/.github/workflows/deployment-router.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deployment-router.yml@v1
     with:
       event_name: ${{ github.event_name }}
       branch: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
@@ -285,7 +285,7 @@ jobs:
   terraform-dev:
     needs: route
     if: contains(fromJson(needs.route.outputs.environments), 'dev')
-    uses: your-org/terraform-workflows/.github/workflows/deploy.yml@v1
+    uses: carlssonk/terraform-workflows/.github/workflows/deploy.yml@v1
     with:
       environment: dev
       action: ${{ needs.route.outputs.action }}
@@ -297,7 +297,7 @@ jobs:
 ```yaml
 jobs:
   route:
-    uses: your-org/github-workflows-library/.github/workflows/deployment-router.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deployment-router.yml@v1
     with:
       event_name: ${{ github.event_name }}
       branch: ${{ github.ref_name }}
@@ -358,7 +358,7 @@ Ensure:
 
 ## Related Workflows
 
-- [Deploy to S3](./deploy-to-s3.md)
+- [Deploy to S3](./deploy-s3.md)
 - [Create Release](./create-release.md)
 - [Send Notification](./notify.md)
 

@@ -20,7 +20,7 @@ on:
 jobs:
   # Perform the rollback
   rollback:
-    uses: your-org/github-workflows-library/.github/workflows/rollback-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/rollback-s3.yml@v1
     with:
       environment: ${{ inputs.environment }}
       aws_region: ${{ vars.AWS_REGION }}
@@ -37,7 +37,7 @@ jobs:
   create-release-tag:
     needs: rollback
     if: needs.rollback.result == 'success'
-    uses: your-org/github-workflows-library/.github/workflows/create-release.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/create-release.yml@v1
     with:
       environment: ${{ inputs.environment }}
       commit_hash: ${{ needs.rollback.outputs.target_commit_hash }}
@@ -50,7 +50,7 @@ jobs:
   notify-slack:
     needs: rollback
     if: always()
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: slack
       status: ${{ needs.rollback.result }}
@@ -70,7 +70,7 @@ jobs:
   notify-discussion:
     needs: rollback
     if: needs.rollback.result == 'success' && inputs.environment == 'production'
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: github-discussion
       status: warning

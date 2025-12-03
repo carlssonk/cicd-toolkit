@@ -20,7 +20,7 @@ on:
 jobs:
   # Determine deployment strategy
   route:
-    uses: your-org/github-workflows-library/.github/workflows/deployment-router.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deployment-router.yml@v1
     with:
       event_name: ${{ github.event_name }}
       branch: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
@@ -33,7 +33,7 @@ jobs:
     if: |
       needs.route.outputs.should_deploy == 'true' &&
       contains(fromJson(needs.route.outputs.environments), 'dev')
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: dev
       aws_region: ${{ vars.AWS_REGION }}
@@ -53,7 +53,7 @@ jobs:
     if: |
       needs.route.outputs.should_deploy == 'true' &&
       contains(fromJson(needs.route.outputs.environments), 'staging')
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: staging
       aws_region: ${{ vars.AWS_REGION }}
@@ -75,7 +75,7 @@ jobs:
     if: |
       needs.route.outputs.should_deploy == 'true' &&
       contains(fromJson(needs.route.outputs.environments), 'production')
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: production
       aws_region: ${{ vars.AWS_REGION }}
@@ -95,7 +95,7 @@ jobs:
   create-release:
     needs: deploy-production
     if: needs.deploy-production.result == 'success'
-    uses: your-org/github-workflows-library/.github/workflows/create-release.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/create-release.yml@v1
     with:
       environment: production
       commit_hash: ${{ needs.deploy-production.outputs.commit_hash }}
@@ -107,7 +107,7 @@ jobs:
   notify:
     needs: [route, deploy-dev, deploy-staging, deploy-production]
     if: always() && needs.route.outputs.should_deploy == 'true'
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: slack
       status: ${{ 

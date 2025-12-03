@@ -22,7 +22,7 @@ jobs:
   notify:
     needs: deploy
     if: always()
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: slack
       status: ${{ needs.deploy.result }}
@@ -38,7 +38,7 @@ jobs:
 ```yaml
 jobs:
   notify:
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: discord
       status: success
@@ -52,7 +52,7 @@ jobs:
 ```yaml
 jobs:
   notify:
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: teams
       status: failure
@@ -67,7 +67,7 @@ jobs:
 ```yaml
 jobs:
   notify:
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: github-discussion
       status: success
@@ -90,7 +90,7 @@ jobs:
   notify:
     needs: deploy
     if: always()
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: slack
       status: ${{ needs.deploy.result }}
@@ -194,7 +194,7 @@ on:
 
 jobs:
   deploy:
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: production
       # ... other inputs
@@ -205,7 +205,7 @@ jobs:
   create-release:
     needs: deploy
     if: needs.deploy.result == 'success'
-    uses: your-org/github-workflows-library/.github/workflows/create-release.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/create-release.yml@v1
     with:
       environment: production
       commit_hash: ${{ needs.deploy.outputs.commit_hash }}
@@ -215,7 +215,7 @@ jobs:
   notify-slack:
     needs: [deploy, create-release]
     if: always()
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: slack
       status: ${{ needs.deploy.result }}
@@ -231,7 +231,7 @@ jobs:
   notify-discussion:
     needs: [deploy, create-release]
     if: needs.deploy.result == 'success'
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: github-discussion
       status: success
@@ -254,7 +254,7 @@ jobs:
   notify-slack:
     needs: deploy
     if: always()
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: slack
       status: ${{ needs.deploy.result }}
@@ -266,7 +266,7 @@ jobs:
   notify-discord:
     needs: deploy
     if: always()
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: discord
       status: ${{ needs.deploy.result }}
@@ -278,7 +278,7 @@ jobs:
   notify-teams:
     needs: deploy
     if: always()
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: teams
       status: ${{ needs.deploy.result }}
@@ -298,7 +298,7 @@ jobs:
   notify-on-failure:
     needs: deploy
     if: needs.deploy.result == 'failure'
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: slack
       status: failure
@@ -312,7 +312,7 @@ jobs:
   notify-on-success:
     needs: deploy
     if: needs.deploy.result == 'success'
-    uses: your-org/github-workflows-library/.github/workflows/notify.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/notify.yml@v1
     with:
       notification_type: github-discussion
       status: success
@@ -358,7 +358,7 @@ jobs:
 
 ## Related Workflows
 
-- [Deploy to S3](./deploy-to-s3.md)
+- [Deploy to S3](./deploy-s3.md)
 - [Rollback S3 Deployment](./rollback-s3.md)
 - [Create Release](./create-release.md)
 

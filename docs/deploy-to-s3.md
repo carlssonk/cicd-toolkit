@@ -25,7 +25,7 @@ on:
 
 jobs:
   deploy:
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: production
       aws_region: us-east-1
@@ -43,7 +43,7 @@ jobs:
 ```yaml
 jobs:
   deploy:
-    uses: your-org/github-workflows-library/.github/workflows/deploy-to-s3.yml@v1
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
     with:
       environment: production
       aws_region: us-east-1

@@ -86,7 +86,7 @@ jobs:
 
 #### Naming Conventions
 
-- **Workflows**: `kebab-case.yml` (e.g., `deploy-to-s3.yml`)
+- **Workflows**: `kebab-case.yml` (e.g., `deploy-s3.yml`)
 - **Jobs**: `kebab-case` (e.g., `deploy-production`)
 - **Steps**: Descriptive sentences (e.g., `Configure AWS Credentials`)
 - **Inputs/Outputs**: `snake_case` (e.g., `aws_role_arn`)
