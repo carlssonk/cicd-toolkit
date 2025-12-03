@@ -20,13 +20,15 @@ on:
         required: true
         type: string
       build_command:
-        description: "Command to build the application"
-        required: true
+        description: "Command to build the application (auto-detected if not provided)"
+        required: false
         type: string
+        default: ""
       build_output_dir:
         description: "Directory containing build output (e.g., dist, build)"
-        required: true
+        required: false
         type: string
+        default: "dist"
       node_version:
         description: "Node.js version to use"
         required: false
@@ -36,7 +38,7 @@ on:
         description: "Package manager to use (npm, yarn, pnpm)"
         required: false
         type: string
-        default: "npm"
+        default: "pnpm"
       package_manager_version:
         description: "Package manager version (only for pnpm)"
         required: false
@@ -157,7 +159,26 @@ jobs:
         fi
 
     - name: Build
-      run: ${{ inputs.build_command }}
+      run: |
+        if [ -n "${{ inputs.build_command }}" ]; then
+          ${{ inputs.build_command }}
+        else
+          case "${{ inputs.package_manager }}" in
+            npm)
+              npm run build
+              ;;
+            yarn)
+              yarn build
+              ;;
+            pnpm)
+              pnpm build
+              ;;
+            *)
+              echo "Unknown package manager: ${{ inputs.package_manager }}"
+              exit 1
+              ;;
+          esac
+        fi
 
     - name: Verify build output
       run: |
