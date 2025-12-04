@@ -62,8 +62,6 @@ jobs:
       build_output_dir: dist
       node_version: "20"
       package_manager: npm
-      enable_cloudfront_invalidation: true
-      cloudfront_distribution_id: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_STAGING }}
     permissions:
       id-token: write
       contents: read
@@ -84,8 +82,6 @@ jobs:
       build_output_dir: dist
       node_version: "20"
       package_manager: npm
-      enable_cloudfront_invalidation: true
-      cloudfront_distribution_id: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID_PRODUCTION }}
     permissions:
       id-token: write
       contents: read

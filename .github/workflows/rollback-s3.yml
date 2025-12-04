@@ -29,16 +29,6 @@ on:
         required: false
         type: string
         default: "public, max-age=300"
-      enable_cloudfront_invalidation:
-        description: "Enable CloudFront cache invalidation after rollback"
-        required: false
-        type: boolean
-        default: false
-      cloudfront_distribution_id:
-        description: "CloudFront distribution ID (required if enable_cloudfront_invalidation is true)"
-        required: false
-        type: string
-        default: ""
       s3_additional_args:
         description: "Additional arguments to pass to aws s3 sync command"
         required: false
@@ -208,22 +198,6 @@ jobs:
         echo "✅ Rollback complete!"
         echo "Main path now points to commit: ${TARGET_HASH}"
 
-    - name: Invalidate CloudFront cache
-      if: inputs.enable_cloudfront_invalidation == true
-      run: |
-        if [ -z "${{ inputs.cloudfront_distribution_id }}" ]; then
-          echo "❌ Error: cloudfront_distribution_id is required when enable_cloudfront_invalidation is true"
-          exit 1
-        fi
-        
-        echo "Invalidating CloudFront distribution: ${{ inputs.cloudfront_distribution_id }}"
-        
-        aws cloudfront create-invalidation \
-          --distribution-id "${{ inputs.cloudfront_distribution_id }}" \
-          --paths "/main/*" "/*"
-        
-        echo "✅ CloudFront invalidation initiated"
-
     - name: Rollback Summary
       run: |
         MODE="${{ steps.target.outputs.mode }}"
@@ -248,10 +222,3 @@ jobs:
         echo "- **Timestamp**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "The \`main\` path has been updated to serve commit \`${TARGET}\`." >> $GITHUB_STEP_SUMMARY
-        
-        if [ "${{ inputs.enable_cloudfront_invalidation }}" = "true" ]; then
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### ☁️ CloudFront" >> $GITHUB_STEP_SUMMARY
-          echo "- Cache invalidation initiated for distribution \`${{ inputs.cloudfront_distribution_id }}\`" >> $GITHUB_STEP_SUMMARY
-        fi
-

@@ -27,8 +27,6 @@ jobs:
       aws_role_arn: arn:aws:iam::${{ vars[format('AWS_ACCOUNT_ID_{0}', upper(inputs.environment))] }}:role/github-actions-role
       s3_bucket: ${{ vars[format('S3_BUCKET_{0}', upper(inputs.environment))] }}
       target_commit_hash: ${{ inputs.commit_hash }}
-      enable_cloudfront_invalidation: true
-      cloudfront_distribution_id: ${{ vars[format('CLOUDFRONT_DISTRIBUTION_ID_{0}', upper(inputs.environment))] }}
     permissions:
       id-token: write
       contents: read

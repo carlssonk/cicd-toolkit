@@ -1,13 +1,12 @@
 # Deploy to S3 with Versioning
 
-A reusable GitHub Actions workflow for deploying applications to AWS S3 with built-in versioning, rollback support, and CloudFront integration.
+A reusable GitHub Actions workflow for deploying applications to AWS S3 with built-in versioning and rollback support.
 
 ## Features
 
 - ✅ **Versioned Deployments**: Each deployment is stored with its commit hash for easy rollback
 - ✅ **Dual-Path Strategy**: Immutable versioned path + mutable main path
 - ✅ **Metadata Tracking**: Tracks deployment timestamps, commit hashes, and previous versions
-- ✅ **CloudFront Integration**: Optional cache invalidation
 - ✅ **Flexible Build System**: Supports npm, yarn, and pnpm
 - ✅ **Concurrency Control**: Prevents race conditions during deployment
 - ✅ **OIDC Authentication**: Secure AWS authentication without long-lived credentials
@@ -38,31 +37,6 @@ jobs:
       contents: read
 ```
 
-### Advanced Example with CloudFront
-
-```yaml
-jobs:
-  deploy:
-    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
-    with:
-      environment: production
-      aws_region: us-east-1
-      aws_role_arn: arn:aws:iam::123456789012:role/github-actions-role
-      s3_bucket: my-app-bucket
-      build_command: pnpm run build
-      build_output_dir: dist
-      package_manager: pnpm
-      package_manager_version: "10"
-      node_version: "20"
-      enable_cloudfront_invalidation: true
-      cloudfront_distribution_id: E1ABCDEFGHIJK
-      cache_control_immutable: "public, max-age=31536000, immutable"
-      cache_control_mutable: "public, max-age=300"
-    permissions:
-      id-token: write
-      contents: read
-```
-
 ## Inputs
 
 ### Required Inputs
@@ -87,8 +61,6 @@ jobs:
 | `cache_control_immutable` | Cache-Control for versioned files | `public, max-age=31536000, immutable` |
 | `cache_control_mutable` | Cache-Control for main path | `public, max-age=300` |
 | `commit_hash_length` | Length of commit hash | `8` |
-| `enable_cloudfront_invalidation` | Enable CloudFront invalidation | `false` |
-| `cloudfront_distribution_id` | CloudFront distribution ID | `""` |
 | `s3_additional_args` | Additional aws s3 sync args | `""` |
 
 ## Outputs
@@ -142,7 +114,6 @@ The workflow automatically tracks the previous deployment, enabling one-click ro
    - `s3:GetObject`
    - `s3:ListBucket`
    - `s3:DeleteObject`
-   - `cloudfront:CreateInvalidation` (if using CloudFront)
 
 ### GitHub Setup
 
@@ -163,7 +134,6 @@ See the [examples](./examples/) directory for complete working examples:
 1. **Use OIDC**: Never use long-lived AWS credentials
 2. **Pin Versions**: Use specific versions or commit SHAs when referencing this workflow
 3. **Set Timeouts**: The workflow includes a 30-minute timeout by default
-4. **Monitor Costs**: CloudFront invalidations have costs; use sparingly
 5. **Test First**: Deploy to staging before production
 
 ## Troubleshooting
@@ -178,13 +148,6 @@ Ensure your `build_output_dir` matches your build tool's output:
 ### AWS Permissions Issues
 
 Verify your IAM role has the required permissions and trust policy for OIDC.
-
-### CloudFront Invalidation Fails
-
-Ensure:
-1. Distribution ID is correct
-2. IAM role has `cloudfront:CreateInvalidation` permission
-3. Distribution is in "Deployed" state
 
 ## Related Workflows
 

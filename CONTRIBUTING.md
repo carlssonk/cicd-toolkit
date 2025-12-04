@@ -149,7 +149,7 @@ Follow conventional commits:
 
 ```
 feat: add support for custom cache control headers
-fix: resolve issue with CloudFront invalidation
+fix: resolve issue with Cloudflare invalidation
 docs: update deployment router examples
 refactor: simplify metadata tracking logic
 test: add tests for rollback validation

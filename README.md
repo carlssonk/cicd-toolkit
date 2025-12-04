@@ -15,7 +15,7 @@ A collection of production-ready, reusable GitHub Actions workflows for modern a
 
 | Workflow | Description | Documentation |
 |----------|-------------|---------------|
-| **deploy-s3.yml** | Deploy applications to S3 with versioning and CloudFront support | [Docs](./docs/deploy-s3.md) |
+| **deploy-s3.yml** | Deploy applications to S3 with versioning | [Docs](./docs/deploy-s3.md) |
 | **rollback-s3.yml** | Rollback S3 deployments to previous versions | [Docs](./docs/rollback-s3.md) |
 | **create-release.yml** | Create release tags and GitHub releases with changelogs | [Docs](./docs/create-release.md) |
 | **notify.yml** | Send notifications to various platforms | [Docs](./docs/notify.md) |
@@ -65,8 +65,6 @@ jobs:
       s3_bucket: my-app-bucket
       build_command: npm run build
       build_output_dir: dist
-      enable_cloudfront_invalidation: true
-      cloudfront_distribution_id: E1ABCDEFGHIJK
     permissions:
       id-token: write
       contents: read
@@ -214,7 +212,6 @@ concurrency:
 2. **IAM Role**: Create an IAM role with OIDC federation
 3. **Permissions**: Grant the role:
    - `s3:PutObject`, `s3:GetObject`, `s3:ListBucket`, `s3:DeleteObject`
-   - `cloudfront:CreateInvalidation` (if using CloudFront)
 
 ### GitHub Setup
 
@@ -241,7 +238,6 @@ These workflows support any framework that builds to static files:
 
 - Versioned deployments with commit hashes
 - Automatic metadata tracking
-- CloudFront cache invalidation
 - Support for npm, yarn, and pnpm
 - Concurrency control
 - Build verification
@@ -253,7 +249,6 @@ These workflows support any framework that builds to static files:
 - Manual rollback to specific commit
 - Validation before rollback
 - Metadata updates
-- CloudFront invalidation support
 - Safety checks
 
 ### Create Release
@@ -352,12 +347,7 @@ dev → staging → production
    - Check build command succeeded
    - Ensure build output isn't gitignored
 
-3. **CloudFront Invalidation Fails**
-   - Verify distribution ID is correct
-   - Check IAM permissions include `cloudfront:CreateInvalidation`
-   - Ensure distribution is in "Deployed" state
-
-4. **Rollback: "No Previous Version"**
+3. **Rollback: "No Previous Version"**
    - This is the first deployment, or
    - Deployment was made before metadata tracking
    - Use manual rollback with specific commit hash

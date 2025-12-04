@@ -64,16 +64,6 @@ on:
         required: false
         type: number
         default: 8
-      enable_cloudfront_invalidation:
-        description: "Enable CloudFront cache invalidation after deployment"
-        required: false
-        type: boolean
-        default: false
-      cloudfront_distribution_id:
-        description: "CloudFront distribution ID (required if enable_cloudfront_invalidation is true)"
-        required: false
-        type: string
-        default: ""
       s3_additional_args:
         description: "Additional arguments to pass to aws s3 sync command"
         required: false
@@ -268,22 +258,6 @@ jobs:
         echo "versioned=s3://${{ inputs.s3_bucket }}/${COMMIT_HASH}/" >> $GITHUB_OUTPUT
         echo "main=s3://${{ inputs.s3_bucket }}/main/" >> $GITHUB_OUTPUT
 
-    - name: Invalidate CloudFront cache
-      if: inputs.enable_cloudfront_invalidation == true
-      run: |
-        if [ -z "${{ inputs.cloudfront_distribution_id }}" ]; then
-          echo "❌ Error: cloudfront_distribution_id is required when enable_cloudfront_invalidation is true"
-          exit 1
-        fi
-        
-        echo "Invalidating CloudFront distribution: ${{ inputs.cloudfront_distribution_id }}"
-        
-        aws cloudfront create-invalidation \
-          --distribution-id "${{ inputs.cloudfront_distribution_id }}" \
-          --paths "/main/*" "/*"
-        
-        echo "✅ CloudFront invalidation initiated"
-
     - name: Deployment Summary
       run: |
         echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
@@ -297,10 +271,3 @@ jobs:
         echo "### 📦 Deployment Paths" >> $GITHUB_STEP_SUMMARY
         echo "- **Versioned**: \`s3://${{ inputs.s3_bucket }}/${{ steps.current.outputs.hash }}/\`" >> $GITHUB_STEP_SUMMARY
         echo "- **Main**: \`s3://${{ inputs.s3_bucket }}/main/\`" >> $GITHUB_STEP_SUMMARY
-        
-        if [ "${{ inputs.enable_cloudfront_invalidation }}" = "true" ]; then
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### ☁️ CloudFront" >> $GITHUB_STEP_SUMMARY
-          echo "- Cache invalidation initiated for distribution \`${{ inputs.cloudfront_distribution_id }}\`" >> $GITHUB_STEP_SUMMARY
-        fi
-

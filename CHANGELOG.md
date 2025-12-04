@@ -25,7 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Versioned deployments with commit hashes
 - Dual-path strategy (versioned + main)
 - Metadata tracking for audit trail
-- CloudFront cache invalidation support
 - Support for npm, yarn, and pnpm
 - Concurrency control
 - OIDC authentication
@@ -36,7 +35,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Manual rollback to specific commit
 - Validation before rollback
 - Metadata updates with rollback tracking
-- CloudFront invalidation support
 - Safety checks and error handling
 
 #### Create Release (`create-release.yml`)

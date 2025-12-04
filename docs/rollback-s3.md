@@ -8,7 +8,6 @@ A reusable GitHub Actions workflow for rolling back S3 deployments to a previous
 - ✅ **Manual Rollback**: Specify any commit hash to roll back to
 - ✅ **Validation**: Verifies target commit exists before rolling back
 - ✅ **Metadata Tracking**: Tracks who performed the rollback and when
-- ✅ **CloudFront Integration**: Optional cache invalidation after rollback
 - ✅ **Concurrency Control**: Prevents race conditions during rollback
 
 ## Usage
@@ -71,24 +70,6 @@ jobs:
       contents: read
 ```
 
-### With CloudFront Invalidation
-
-```yaml
-jobs:
-  rollback:
-    uses: carlssonk/cicd-toolkit/.github/workflows/rollback-s3.yml@v1
-    with:
-      environment: production
-      aws_region: us-east-1
-      aws_role_arn: arn:aws:iam::123456789012:role/github-actions-role
-      s3_bucket: my-app-bucket
-      enable_cloudfront_invalidation: true
-      cloudfront_distribution_id: E1ABCDEFGHIJK
-    permissions:
-      id-token: write
-      contents: read
-```
-
 ## Inputs
 
 ### Required Inputs
@@ -106,8 +87,6 @@ jobs:
 |-------|-------------|---------|
 | `target_commit_hash` | Specific commit to rollback to | `""` (auto-detect previous) |
 | `cache_control_mutable` | Cache-Control for main path | `public, max-age=300` |
-| `enable_cloudfront_invalidation` | Enable CloudFront invalidation | `false` |
-| `cloudfront_distribution_id` | CloudFront distribution ID | `""` |
 | `s3_additional_args` | Additional aws s3 sync args | `""` |
 
 ## Outputs
@@ -196,8 +175,6 @@ jobs:
       aws_role_arn: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/github-actions-role
       s3_bucket: ${{ vars.S3_BUCKET }}
       target_commit_hash: ${{ inputs.commit_hash }}
-      enable_cloudfront_invalidation: true
-      cloudfront_distribution_id: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
     permissions:
       id-token: write
       contents: read
