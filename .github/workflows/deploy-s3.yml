@@ -138,8 +138,9 @@ jobs:
 
     - name: Install dependencies
       run: |
-        if [ -n "${{ inputs.install_command }}" ]; then
-          ${{ inputs.install_command }}
+        INSTALL_CMD="${{ inputs.install_command }}"
+        if [ -n "$INSTALL_CMD" ]; then
+          $INSTALL_CMD
         else
           case "${{ inputs.package_manager }}" in
             npm)
@@ -160,8 +161,9 @@ jobs:
 
     - name: Build
       run: |
-        if [ -n "${{ inputs.build_command }}" ]; then
-          ${{ inputs.build_command }}
+        BUILD_CMD="${{ inputs.build_command }}"
+        if [ -n "$BUILD_CMD" ]; then
+          $BUILD_CMD
         else
           case "${{ inputs.package_manager }}" in
             npm)
