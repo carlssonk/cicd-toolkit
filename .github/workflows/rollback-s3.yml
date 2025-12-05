@@ -29,11 +29,25 @@ on:
         required: false
         type: string
         default: "public, max-age=300"
+      enable_cloudflare_cache_purge:
+        description: "Enable Cloudflare cache purge after rollback"
+        required: false
+        type: boolean
+        default: false
+      cloudflare_zone_id:
+        description: "Cloudflare Zone ID (required if enable_cloudflare_cache_purge is true)"
+        required: false
+        type: string
+        default: ""
       s3_additional_args:
         description: "Additional arguments to pass to aws s3 sync command"
         required: false
         type: string
         default: ""
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        description: "Cloudflare API token with cache purge permissions (required if enable_cloudflare_cache_purge is true)"
+        required: false
     outputs:
       target_commit_hash:
         description: "The commit hash that was rolled back to"
@@ -198,6 +212,13 @@ jobs:
         echo "✅ Rollback complete!"
         echo "Main path now points to commit: ${TARGET_HASH}"
 
+    - name: Purge Cloudflare cache
+      if: inputs.enable_cloudflare_cache_purge == true
+      uses: carlssonk/cicd-toolkit/.github/actions/purge-cloudflare-cache@main
+      with:
+        cloudflare_zone_id: ${{ inputs.cloudflare_zone_id }}
+        cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
     - name: Rollback Summary
       run: |
         MODE="${{ steps.target.outputs.mode }}"
@@ -222,3 +243,10 @@ jobs:
         echo "- **Timestamp**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "The \`main\` path has been updated to serve commit \`${TARGET}\`." >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ inputs.enable_cloudflare_cache_purge }}" = "true" ]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🌐 Cloudflare" >> $GITHUB_STEP_SUMMARY
+          echo "- Cache purged for zone \`${{ inputs.cloudflare_zone_id }}\`" >> $GITHUB_STEP_SUMMARY
+        fi
+

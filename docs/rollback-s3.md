@@ -88,6 +88,8 @@ jobs:
 | `target_commit_hash` | Specific commit to rollback to | `""` (auto-detect previous) |
 | `cache_control_mutable` | Cache-Control for main path | `public, max-age=300` |
 | `s3_additional_args` | Additional aws s3 sync args | `""` |
+| `enable_cloudflare_cache_purge` | Enable Cloudflare cache purge | `false` |
+| `cloudflare_zone_id` | Cloudflare Zone ID | `""` |
 
 ## Outputs
 
@@ -230,9 +232,32 @@ The commit doesn't exist in your git history.
 - ✅ Tracks who performed the rollback
 - ✅ Concurrency control prevents simultaneous rollbacks
 
+## Cloudflare Cache Purge
+
+To automatically purge Cloudflare cache after rollback:
+
+```yaml
+jobs:
+  rollback:
+    uses: carlssonk/cicd-toolkit/.github/workflows/rollback-s3.yml@v1
+    with:
+      environment: production
+      aws_region: us-east-1
+      aws_role_arn: arn:aws:iam::123456789012:role/github-actions-role
+      s3_bucket: my-app-bucket
+      enable_cloudflare_cache_purge: true
+      cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    permissions:
+      id-token: write
+      contents: read
+```
+
 ## Related Workflows
 
 - [Deploy to S3](./deploy-s3.md)
 - [Create Release](./create-release.md)
 - [Send Notification](./notify.md)
+- [Invalidate Cloudflare Cache](./invalidate-cloudflare-cache.md)
 

@@ -62,6 +62,8 @@ jobs:
 | `cache_control_mutable` | Cache-Control for main path | `public, max-age=300` |
 | `commit_hash_length` | Length of commit hash | `8` |
 | `s3_additional_args` | Additional aws s3 sync args | `""` |
+| `enable_cloudflare_cache_purge` | Enable Cloudflare cache purge | `false` |
+| `cloudflare_zone_id` | Cloudflare Zone ID | `""` |
 
 ## Outputs
 
@@ -149,8 +151,33 @@ Ensure your `build_output_dir` matches your build tool's output:
 
 Verify your IAM role has the required permissions and trust policy for OIDC.
 
+## Cloudflare Cache Purge
+
+To automatically purge Cloudflare cache after deployment:
+
+```yaml
+jobs:
+  deploy:
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
+    with:
+      environment: production
+      aws_region: us-east-1
+      aws_role_arn: arn:aws:iam::123456789012:role/github-actions-role
+      s3_bucket: my-app-bucket
+      enable_cloudflare_cache_purge: true
+      cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    permissions:
+      id-token: write
+      contents: read
+```
+
+For more granular cache control, see [Invalidate Cloudflare Cache](./invalidate-cloudflare-cache.md).
+
 ## Related Workflows
 
 - [Rollback S3 Deployment](./rollback-s3.md)
 - [Create Release](./create-release.md)
+- [Invalidate Cloudflare Cache](./invalidate-cloudflare-cache.md)
 

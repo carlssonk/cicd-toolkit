@@ -64,11 +64,25 @@ on:
         required: false
         type: number
         default: 8
+      enable_cloudflare_cache_purge:
+        description: "Enable Cloudflare cache purge after deployment"
+        required: false
+        type: boolean
+        default: false
+      cloudflare_zone_id:
+        description: "Cloudflare Zone ID (required if enable_cloudflare_cache_purge is true)"
+        required: false
+        type: string
+        default: ""
       s3_additional_args:
         description: "Additional arguments to pass to aws s3 sync command"
         required: false
         type: string
         default: ""
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        description: "Cloudflare API token with cache purge permissions (required if enable_cloudflare_cache_purge is true)"
+        required: false
     outputs:
       commit_hash:
         description: "The commit hash that was deployed"
@@ -258,6 +272,13 @@ jobs:
         echo "versioned=s3://${{ inputs.s3_bucket }}/${COMMIT_HASH}/" >> $GITHUB_OUTPUT
         echo "main=s3://${{ inputs.s3_bucket }}/main/" >> $GITHUB_OUTPUT
 
+    - name: Purge Cloudflare cache
+      if: inputs.enable_cloudflare_cache_purge == true
+      uses: carlssonk/cicd-toolkit/.github/actions/purge-cloudflare-cache@main
+      with:
+        cloudflare_zone_id: ${{ inputs.cloudflare_zone_id }}
+        cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
     - name: Deployment Summary
       run: |
         echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
@@ -271,3 +292,10 @@ jobs:
         echo "### 📦 Deployment Paths" >> $GITHUB_STEP_SUMMARY
         echo "- **Versioned**: \`s3://${{ inputs.s3_bucket }}/${{ steps.current.outputs.hash }}/\`" >> $GITHUB_STEP_SUMMARY
         echo "- **Main**: \`s3://${{ inputs.s3_bucket }}/main/\`" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ inputs.enable_cloudflare_cache_purge }}" = "true" ]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🌐 Cloudflare" >> $GITHUB_STEP_SUMMARY
+          echo "- Cache purged for zone \`${{ inputs.cloudflare_zone_id }}\`" >> $GITHUB_STEP_SUMMARY
+        fi
+
