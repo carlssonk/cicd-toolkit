@@ -240,7 +240,11 @@ jobs:
             RELEASE_ARGS+=(--prerelease)
           fi
           
-          RELEASE_URL=$(gh release create "${RELEASE_ARGS[@]}" --json url --jq .url)
+          gh release create "${RELEASE_ARGS[@]}"
+          
+          # Construct the release URL
+          REPO_URL="${{ github.server_url }}/${{ github.repository }}"
+          RELEASE_URL="${REPO_URL}/releases/tag/${TAG_NAME}"
           
           echo "url=${RELEASE_URL}" >> $GITHUB_OUTPUT
           echo "✅ Release created: ${RELEASE_URL}"
