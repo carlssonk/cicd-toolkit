@@ -55,7 +55,7 @@ on:
         type: string
         default: "public, max-age=31536000, immutable"
       cache_control_mutable:
-        description: "Cache-Control header for main path (mutable) files"
+        description: "Cache-Control header for latest path (mutable) files"
         required: false
         type: string
         default: "public, max-age=300"
@@ -96,9 +96,9 @@ on:
       s3_versioned_url:
         description: "S3 URL for the versioned deployment"
         value: ${{ jobs.deploy.outputs.s3_versioned_url }}
-      s3_main_url:
-        description: "S3 URL for the main deployment"
-        value: ${{ jobs.deploy.outputs.s3_main_url }}
+      s3_latest_url:
+        description: "S3 URL for the latest deployment"
+        value: ${{ jobs.deploy.outputs.s3_latest_url }}
 
 jobs:
   deploy:
@@ -113,7 +113,7 @@ jobs:
       previous_commit_hash: ${{ steps.previous.outputs.hash }}
       deployment_timestamp: ${{ steps.current.outputs.timestamp }}
       s3_versioned_url: ${{ steps.urls.outputs.versioned }}
-      s3_main_url: ${{ steps.urls.outputs.main }}
+      s3_latest_url: ${{ steps.urls.outputs.latest }}
     permissions:
       id-token: write
       contents: read
@@ -217,7 +217,7 @@ jobs:
         # Get the current commit hash before we deploy the new one
         PREVIOUS_HASH=$(aws s3api head-object \
           --bucket "${{ inputs.s3_bucket }}" \
-          --key "main/index.html" \
+          --key "latest/index.html" \
           --query 'Metadata."commit-hash-short"' \
           --output text 2>/dev/null || echo "")
         
@@ -243,34 +243,34 @@ jobs:
         
         echo "✅ Versioned deployment complete"
 
-    - name: Deploy main path to S3
+    - name: Deploy latest path to S3
       run: |
         COMMIT_HASH="${{ steps.current.outputs.hash }}"
         PREVIOUS_HASH="${{ steps.previous.outputs.hash }}"
         
-        echo "Deploying main path: s3://${{ inputs.s3_bucket }}/main/"
+        echo "Deploying latest path: s3://${{ inputs.s3_bucket }}/latest/"
         
-        # Build metadata for main path
+        # Build metadata for latest path
         METADATA="deployed-at=${{ steps.current.outputs.timestamp }},commit-hash-short=${COMMIT_HASH},environment=${{ inputs.environment }}"
         if [[ -n "$PREVIOUS_HASH" ]]; then
           METADATA="${METADATA},prev-commit-hash-short=${PREVIOUS_HASH}"
         fi
         
-        # Upload main path (mutable, short cache)
-        aws s3 sync "${{ inputs.build_output_dir }}/" "s3://${{ inputs.s3_bucket }}/main/" \
+        # Upload latest path (mutable, short cache)
+        aws s3 sync "${{ inputs.build_output_dir }}/" "s3://${{ inputs.s3_bucket }}/latest/" \
           --cache-control "${{ inputs.cache_control_mutable }}" \
           --metadata "${METADATA}" \
           --delete \
           ${{ inputs.s3_additional_args }}
         
-        echo "✅ Main path deployment complete"
+        echo "✅ Latest path deployment complete"
 
     - name: Set output URLs
       id: urls
       run: |
         COMMIT_HASH="${{ steps.current.outputs.hash }}"
         echo "versioned=s3://${{ inputs.s3_bucket }}/${COMMIT_HASH}/" >> $GITHUB_OUTPUT
-        echo "main=s3://${{ inputs.s3_bucket }}/main/" >> $GITHUB_OUTPUT
+        echo "latest=s3://${{ inputs.s3_bucket }}/latest/" >> $GITHUB_OUTPUT
 
     - name: Purge Cloudflare cache
       if: inputs.enable_cloudflare_cache_purge == true
@@ -291,7 +291,7 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📦 Deployment Paths" >> $GITHUB_STEP_SUMMARY
         echo "- **Versioned**: \`s3://${{ inputs.s3_bucket }}/${{ steps.current.outputs.hash }}/\`" >> $GITHUB_STEP_SUMMARY
-        echo "- **Main**: \`s3://${{ inputs.s3_bucket }}/main/\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Latest**: \`s3://${{ inputs.s3_bucket }}/latest/\`" >> $GITHUB_STEP_SUMMARY
         
         if [ "${{ inputs.enable_cloudflare_cache_purge }}" = "true" ]; then
           echo "" >> $GITHUB_STEP_SUMMARY

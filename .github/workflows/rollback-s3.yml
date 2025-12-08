@@ -25,7 +25,7 @@ on:
         type: string
         default: ""
       cache_control_mutable:
-        description: "Cache-Control header for main path files"
+        description: "Cache-Control header for latest path files"
         required: false
         type: string
         default: "public, max-age=300"
@@ -115,7 +115,7 @@ jobs:
           # Get current commit hash from S3
           CURRENT_HASH=$(aws s3api head-object \
             --bucket "${BUCKET}" \
-            --key "main/index.html" \
+            --key "latest/index.html" \
             --query 'Metadata."commit-hash-short"' \
             --output text 2>/dev/null || echo "")
           
@@ -129,7 +129,7 @@ jobs:
           # Get previous commit hash from metadata
           PREVIOUS_HASH=$(aws s3api head-object \
             --bucket "${BUCKET}" \
-            --key "main/index.html" \
+            --key "latest/index.html" \
             --query 'Metadata."prev-commit-hash-short"' \
             --output text 2>/dev/null || echo "")
           
@@ -173,7 +173,7 @@ jobs:
         # Get current commit hash (might be different from target if manual rollback)
         CURRENT_HASH=$(aws s3api head-object \
           --bucket "${BUCKET}" \
-          --key "main/index.html" \
+          --key "latest/index.html" \
           --query 'Metadata."commit-hash-short"' \
           --output text 2>/dev/null || echo "")
         
@@ -183,14 +183,14 @@ jobs:
           echo "current=unknown" >> $GITHUB_OUTPUT
         fi
 
-    - name: Rollback main path
+    - name: Rollback latest path
       run: |
         BUCKET="${{ inputs.s3_bucket }}"
         TARGET_HASH="${{ steps.target.outputs.hash }}"
         CURRENT_HASH="${{ steps.current_state.outputs.current }}"
         TIMESTAMP=$(date -u +%Y%m%d-%H%M%S)
         
-        echo "Rolling back ${BUCKET}/main/ to commit ${TARGET_HASH}..."
+        echo "Rolling back ${BUCKET}/latest/ to commit ${TARGET_HASH}..."
         
         # Build metadata
         METADATA="deployed-at=${TIMESTAMP},commit-hash-short=${TARGET_HASH},environment=${{ inputs.environment }}"
@@ -203,14 +203,14 @@ jobs:
         # Add rollback tracking
         METADATA="${METADATA},rolled-back-from=${CURRENT_HASH},rollback-by=${{ github.actor }}"
         
-        aws s3 sync "s3://${BUCKET}/${TARGET_HASH}/" "s3://${BUCKET}/main/" \
+        aws s3 sync "s3://${BUCKET}/${TARGET_HASH}/" "s3://${BUCKET}/latest/" \
           --cache-control "${{ inputs.cache_control_mutable }}" \
           --metadata "${METADATA}" \
           --delete \
           ${{ inputs.s3_additional_args }}
         
         echo "✅ Rollback complete!"
-        echo "Main path now points to commit: ${TARGET_HASH}"
+        echo "Latest path now points to commit: ${TARGET_HASH}"
 
     - name: Purge Cloudflare cache
       if: inputs.enable_cloudflare_cache_purge == true
@@ -242,7 +242,7 @@ jobs:
         echo "- **Performed by**: @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Timestamp**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "The \`main\` path has been updated to serve commit \`${TARGET}\`." >> $GITHUB_STEP_SUMMARY
+        echo "The \`latest\` path has been updated to serve commit \`${TARGET}\`." >> $GITHUB_STEP_SUMMARY
         
         if [ "${{ inputs.enable_cloudflare_cache_purge }}" = "true" ]; then
           echo "" >> $GITHUB_STEP_SUMMARY

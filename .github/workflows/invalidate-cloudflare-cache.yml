@@ -13,12 +13,12 @@ on:
         type: boolean
         default: true
       purge_urls:
-        description: "JSON array of specific URLs to purge (e.g., '[\"https://example.com/main/\"]')"
+        description: "JSON array of specific URLs to purge (e.g., '[\"https://example.com/\"]')"
         required: false
         type: string
         default: ""
       purge_prefixes:
-        description: "JSON array of URL prefixes to purge (Enterprise only, e.g., '[\"https://example.com/main/\"]')"
+        description: "JSON array of URL prefixes to purge (Enterprise only, e.g., '[\"https://example.com/\"]')"
         required: false
         type: string
         default: ""

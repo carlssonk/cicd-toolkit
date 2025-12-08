@@ -38,7 +38,7 @@ jobs:
     with:
       cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
       purge_everything: false
-      purge_urls: '["https://example.com/main/index.html", "https://example.com/main/app.js"]'
+      purge_urls: '["https://example.com/latest/index.html", "https://example.com/latest/app.js"]'
     secrets:
       cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 ```
@@ -197,7 +197,7 @@ jobs:
     with:
       cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
       purge_everything: false
-      purge_urls: '["https://example.com/main/index.html"]'
+      purge_urls: '["https://example.com/latest/index.html"]'
     secrets:
       cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 ```
