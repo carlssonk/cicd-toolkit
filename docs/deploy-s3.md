@@ -5,7 +5,7 @@ A reusable GitHub Actions workflow for deploying applications to AWS S3 with bui
 ## Features
 
 - ✅ **Versioned Deployments**: Each deployment is stored with its commit hash for easy rollback
-- ✅ **Dual-Path Strategy**: Immutable versioned path + mutable main path
+- ✅ **Dual-Path Strategy**: Immutable versioned path + mutable latest path
 - ✅ **Metadata Tracking**: Tracks deployment timestamps, commit hashes, and previous versions
 - ✅ **Flexible Build System**: Supports npm, yarn, and pnpm
 - ✅ **Concurrency Control**: Prevents race conditions during deployment
@@ -59,9 +59,11 @@ jobs:
 | `package_manager_version` | Package manager version (pnpm only) | `""` |
 | `install_command` | Custom install command | Auto-detected |
 | `cache_control_immutable` | Cache-Control for versioned files | `public, max-age=31536000, immutable` |
-| `cache_control_mutable` | Cache-Control for main path | `public, max-age=300` |
+| `cache_control_mutable` | Cache-Control for latest path | `public, max-age=300` |
 | `commit_hash_length` | Length of commit hash | `8` |
 | `s3_additional_args` | Additional aws s3 sync args | `""` |
+| `enable_cloudflare_cache_purge` | Enable Cloudflare cache purge | `false` |
+| `cloudflare_zone_id` | Cloudflare Zone ID | `""` |
 
 ## Outputs
 
@@ -71,7 +73,7 @@ jobs:
 | `previous_commit_hash` | The previous commit hash |
 | `deployment_timestamp` | Timestamp of deployment |
 | `s3_versioned_url` | S3 URL for versioned deployment |
-| `s3_main_url` | S3 URL for main deployment |
+| `s3_latest_url` | S3 URL for latest deployment |
 
 ## How It Works
 
@@ -85,7 +87,7 @@ The workflow uses a dual-path deployment strategy:
    - Never deleted
    - Used for rollbacks
 
-2. **Main Path** (`s3://bucket/main/`)
+2. **Latest Path** (`s3://bucket/latest/`)
    - Mutable deployment
    - Short cache duration (5 minutes)
    - Updated with each deployment
@@ -149,8 +151,33 @@ Ensure your `build_output_dir` matches your build tool's output:
 
 Verify your IAM role has the required permissions and trust policy for OIDC.
 
+## Cloudflare Cache Purge
+
+To automatically purge Cloudflare cache after deployment:
+
+```yaml
+jobs:
+  deploy:
+    uses: carlssonk/cicd-toolkit/.github/workflows/deploy-s3.yml@v1
+    with:
+      environment: production
+      aws_region: us-east-1
+      aws_role_arn: arn:aws:iam::123456789012:role/github-actions-role
+      s3_bucket: my-app-bucket
+      enable_cloudflare_cache_purge: true
+      cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    permissions:
+      id-token: write
+      contents: read
+```
+
+For more granular cache control, see [Invalidate Cloudflare Cache](./invalidate-cloudflare-cache.md).
+
 ## Related Workflows
 
 - [Rollback S3 Deployment](./rollback-s3.md)
 - [Create Release](./create-release.md)
+- [Invalidate Cloudflare Cache](./invalidate-cloudflare-cache.md)
 

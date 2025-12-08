@@ -181,13 +181,13 @@ After deployment, verify:
 
 1. Check S3 bucket has two paths:
    - `s3://my-app-bucket/{commit-hash}/`
-   - `s3://my-app-bucket/main/`
+   - `s3://my-app-bucket/latest/`
 
 2. Check metadata:
 ```bash
 aws s3api head-object \
   --bucket my-app-bucket \
-  --key main/index.html \
+  --key latest/index.html \
   --query Metadata
 ```
 

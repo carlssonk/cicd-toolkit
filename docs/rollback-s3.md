@@ -86,8 +86,10 @@ jobs:
 | Input | Description | Default |
 |-------|-------------|---------|
 | `target_commit_hash` | Specific commit to rollback to | `""` (auto-detect previous) |
-| `cache_control_mutable` | Cache-Control for main path | `public, max-age=300` |
+| `cache_control_mutable` | Cache-Control for latest path | `public, max-age=300` |
 | `s3_additional_args` | Additional aws s3 sync args | `""` |
+| `enable_cloudflare_cache_purge` | Enable Cloudflare cache purge | `false` |
+| `cloudflare_zone_id` | Cloudflare Zone ID | `""` |
 
 ## Outputs
 
@@ -104,19 +106,19 @@ jobs:
 1. Reads current deployment metadata from S3
 2. Extracts `prev-commit-hash-short` from metadata
 3. Verifies the previous version exists in S3
-4. Syncs the previous version to the main path
+4. Syncs the previous version to the latest path
 5. Updates metadata with rollback information
 
 ### Manual Rollback
 
 1. Validates the provided commit hash against git history
 2. Verifies the commit exists in S3 (was previously deployed)
-3. Syncs that version to the main path
+3. Syncs that version to the latest path
 4. Updates metadata with rollback information
 
 ### Metadata Updates
 
-After rollback, the main path metadata includes:
+After rollback, the latest path metadata includes:
 - `commit-hash-short`: Target commit (rolled back to)
 - `prev-commit-hash-short`: Previous commit (rolled back from)
 - `rolled-back-from`: Commit we rolled back from
@@ -134,7 +136,7 @@ Same as [Deploy to S3](./deploy-s3.md#aws-setup)
 The rollback workflow requires:
 1. Previous deployment was done using `deploy-s3.yml`
 2. Versioned deployments exist in S3 (`s3://bucket/{commit-hash}/`)
-3. Main path has proper metadata
+3. Latest path has proper metadata
 
 ## Examples
 
@@ -230,9 +232,32 @@ The commit doesn't exist in your git history.
 - ✅ Tracks who performed the rollback
 - ✅ Concurrency control prevents simultaneous rollbacks
 
+## Cloudflare Cache Purge
+
+To automatically purge Cloudflare cache after rollback:
+
+```yaml
+jobs:
+  rollback:
+    uses: carlssonk/cicd-toolkit/.github/workflows/rollback-s3.yml@v1
+    with:
+      environment: production
+      aws_region: us-east-1
+      aws_role_arn: arn:aws:iam::123456789012:role/github-actions-role
+      s3_bucket: my-app-bucket
+      enable_cloudflare_cache_purge: true
+      cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    permissions:
+      id-token: write
+      contents: read
+```
+
 ## Related Workflows
 
 - [Deploy to S3](./deploy-s3.md)
 - [Create Release](./create-release.md)
 - [Send Notification](./notify.md)
+- [Invalidate Cloudflare Cache](./invalidate-cloudflare-cache.md)
 

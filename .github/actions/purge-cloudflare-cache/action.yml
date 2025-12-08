@@ -1,0 +1,95 @@
+name: Purge Cloudflare Cache
+description: Purge Cloudflare cache for a zone
+
+inputs:
+  cloudflare_zone_id:
+    description: "Cloudflare Zone ID"
+    required: true
+  cloudflare_api_token:
+    description: "Cloudflare API token with cache purge permissions"
+    required: true
+  purge_everything:
+    description: "Purge all cached content"
+    required: false
+    default: "true"
+  purge_urls:
+    description: "JSON array of specific URLs to purge"
+    required: false
+    default: ""
+  purge_hosts:
+    description: "JSON array of hostnames to purge"
+    required: false
+    default: ""
+
+outputs:
+  purge_id:
+    description: "The ID of the purge request"
+    value: ${{ steps.purge.outputs.id }}
+  purge_type:
+    description: "Type of purge performed"
+    value: ${{ steps.purge.outputs.type }}
+
+runs:
+  using: composite
+  steps:
+    - name: Purge Cloudflare cache
+      id: purge
+      shell: bash
+      env:
+        CF_ZONE_ID: ${{ inputs.cloudflare_zone_id }}
+        CF_API_TOKEN: ${{ inputs.cloudflare_api_token }}
+        PURGE_EVERYTHING: ${{ inputs.purge_everything }}
+        PURGE_URLS: ${{ inputs.purge_urls }}
+        PURGE_HOSTS: ${{ inputs.purge_hosts }}
+      run: |
+        API_URL="https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache"
+        
+        # Determine purge type and build request body
+        if [ "$PURGE_EVERYTHING" = "true" ]; then
+          echo "Purging all cached content..."
+          BODY='{"purge_everything": true}'
+          PURGE_TYPE="everything"
+        elif [ -n "$PURGE_URLS" ]; then
+          echo "Purging specific URLs..."
+          BODY="{\"files\": ${PURGE_URLS}}"
+          PURGE_TYPE="urls"
+        elif [ -n "$PURGE_HOSTS" ]; then
+          echo "Purging by hostnames..."
+          BODY="{\"hosts\": ${PURGE_HOSTS}}"
+          PURGE_TYPE="hosts"
+        else
+          echo "❌ Error: No purge method specified"
+          exit 1
+        fi
+        
+        echo "type=${PURGE_TYPE}" >> $GITHUB_OUTPUT
+        
+        # Make API request
+        RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${API_URL}" \
+          -H "Authorization: Bearer ${CF_API_TOKEN}" \
+          -H "Content-Type: application/json" \
+          -d "${BODY}")
+        
+        HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+        RESPONSE_BODY=$(echo "$RESPONSE" | sed '$d')
+        
+        # Check response
+        if [ "$HTTP_CODE" -eq 200 ]; then
+          SUCCESS=$(echo "$RESPONSE_BODY" | jq -r '.success')
+          if [ "$SUCCESS" = "true" ]; then
+            PURGE_ID=$(echo "$RESPONSE_BODY" | jq -r '.result.id // "N/A"')
+            echo "✅ Cloudflare cache purge successful!"
+            echo "Purge ID: ${PURGE_ID}"
+            echo "id=${PURGE_ID}" >> $GITHUB_OUTPUT
+          else
+            ERRORS=$(echo "$RESPONSE_BODY" | jq -r '.errors[]?.message // "Unknown error"')
+            echo "❌ Cloudflare API returned success=false"
+            echo "Errors: ${ERRORS}"
+            exit 1
+          fi
+        else
+          echo "❌ Cloudflare API request failed with HTTP ${HTTP_CODE}"
+          echo "Response: ${RESPONSE_BODY}"
+          exit 1
+        fi
+
