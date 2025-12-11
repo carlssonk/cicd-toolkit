@@ -231,7 +231,7 @@ jobs:
           # Create release
           RELEASE_ARGS=(
             "${TAG_NAME}"
-            --title "${{ inputs.environment == 'production' && '🚀' || '🧪' }} Release ${COMMIT_HASH} (${{ inputs.environment }})"
+            --title "${{ inputs.environment == 'production' && '🚀' || '🧪' }} Release ${COMMIT_HASH}"
             --notes "${RELEASE_NOTES}"
           )
           
