@@ -3,6 +3,9 @@ name: Send Notification (Reusable)
 on:
   workflow_call:
     inputs:
+      runner:
+        type: string
+        default: ubuntu-latest
       notification_type:
         description: "Type of notification (slack, discord, teams, email, github-discussion)"
         required: true
@@ -84,7 +87,7 @@ on:
 jobs:
   notify:
     name: Send Notification
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 5
     permissions:
       contents: read

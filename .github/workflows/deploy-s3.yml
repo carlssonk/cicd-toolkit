@@ -3,6 +3,9 @@ name: Deploy to S3 with Versioning (Reusable)
 on:
   workflow_call:
     inputs:
+      runner:
+        type: string
+        default: ubuntu-latest
       environment:
         description: "Environment name (e.g., dev, staging, production)"
         required: true
@@ -103,7 +106,7 @@ on:
 jobs:
   deploy:
     name: Deploy to S3 - ${{ inputs.environment }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     concurrency:
       group: s3-deploy-${{ inputs.environment }}-${{ inputs.s3_bucket }}

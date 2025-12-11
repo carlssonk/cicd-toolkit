@@ -3,6 +3,9 @@ name: Invalidate Cloudflare Cache (Reusable)
 on:
   workflow_call:
     inputs:
+      runner:
+        type: string
+        default: ubuntu-latest
       cloudflare_zone_id:
         description: "Cloudflare Zone ID"
         required: true
@@ -47,7 +50,7 @@ on:
 jobs:
   invalidate:
     name: Invalidate Cloudflare Cache
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 5
     outputs:
       purge_id: ${{ steps.purge.outputs.id }}

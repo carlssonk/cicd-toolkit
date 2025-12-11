@@ -3,6 +3,9 @@ name: Create Release Tag (Reusable)
 on:
   workflow_call:
     inputs:
+      runner:
+        type: string
+        default: ubuntu-latest
       environment:
         description: "Environment being deployed (e.g., staging, production)"
         required: true
@@ -60,7 +63,7 @@ on:
 jobs:
   create-release:
     name: Create Release for ${{ inputs.environment }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 10
     if: ${{ !inputs.only_production || inputs.environment == 'production' }}
     permissions:

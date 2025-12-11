@@ -3,6 +3,9 @@ name: Rollback S3 Deployment (Reusable)
 on:
   workflow_call:
     inputs:
+      runner:
+        type: string
+        default: ubuntu-latest
       environment:
         description: "Environment name (e.g., staging, production)"
         required: true
@@ -62,7 +65,7 @@ on:
 jobs:
   rollback:
     name: Rollback ${{ inputs.environment }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 20
     concurrency:
       group: s3-rollback-${{ inputs.environment }}-${{ inputs.s3_bucket }}
