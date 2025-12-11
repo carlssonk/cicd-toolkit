@@ -259,5 +259,4 @@ jobs:
 - [Deploy to S3](./deploy-s3.md)
 - [Create Release](./create-release.md)
 - [Send Notification](./notify.md)
-- [Invalidate Cloudflare Cache](./invalidate-cloudflare-cache.md)
 

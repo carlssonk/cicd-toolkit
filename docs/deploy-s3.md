@@ -173,11 +173,7 @@ jobs:
       contents: read
 ```
 
-For more granular cache control, see [Invalidate Cloudflare Cache](./invalidate-cloudflare-cache.md).
-
 ## Related Workflows
 
 - [Rollback S3 Deployment](./rollback-s3.md)
 - [Create Release](./create-release.md)
-- [Invalidate Cloudflare Cache](./invalidate-cloudflare-cache.md)
-
