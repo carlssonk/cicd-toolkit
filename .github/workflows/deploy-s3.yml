@@ -122,6 +122,10 @@ jobs:
       contents: read
 
     steps:
+    # Enable RunsOn features (Magic Cache, etc.) - no-op on GitHub runners
+    - name: Enable RunsOn features
+      uses: runs-on/action@v2
+
     - name: Checkout
       uses: actions/checkout@v4
 
