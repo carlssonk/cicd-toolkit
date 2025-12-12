@@ -159,7 +159,7 @@ jobs:
         
         echo "Checking if commit ${TARGET_HASH} exists in bucket ${BUCKET}..."
         
-        if aws s3 ls "s3://${BUCKET}/${TARGET_HASH}/" --max-items 1 | grep -q .; then
+        if aws s3 ls "s3://${BUCKET}/${TARGET_HASH}/" | grep -q .; then
           echo "✅ Commit ${TARGET_HASH} found in S3"
         else
           echo "❌ Commit ${TARGET_HASH} not found in S3"
