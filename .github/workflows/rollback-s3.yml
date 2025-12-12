@@ -206,15 +206,16 @@ jobs:
         # Add rollback tracking
         METADATA="${METADATA},rolled-back-from=${CURRENT_HASH},rollback-by=${{ github.actor }}"
         
-        # Use sync with exact-timestamps to force copying all files
-        # This ensures all files are copied and metadata is updated, even if sizes match
+        # Delete all files in latest/ first to ensure clean rollback
+        aws s3 rm "s3://${BUCKET}/latest/" --recursive || exit 1
+
+        # TODO: Add error handling for cases if sync command fails so we're not left with an empty bucket
         aws s3 sync "s3://${BUCKET}/${TARGET_HASH}/" "s3://${BUCKET}/latest/" \
-          --exact-timestamps \
+          --delete \
+          --metadata-directive REPLACE \
           --cache-control "${{ inputs.cache_control_mutable }}" \
           --metadata "${METADATA}" \
-          --metadata-directive REPLACE \
-          --delete \
-          ${{ inputs.s3_additional_args }}
+          ${{ inputs.s3_additional_args }} || exit 1
         
         echo "✅ Rollback complete!"
         echo "Latest path now points to commit: ${TARGET_HASH}"
