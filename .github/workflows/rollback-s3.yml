@@ -223,6 +223,7 @@ jobs:
         aws s3 sync rollback-temp/ "s3://${BUCKET}/latest/" \
           --cache-control "${{ inputs.cache_control_mutable }}" \
           --metadata "${METADATA}" \
+          --metadata-directive REPLACE \
           --delete \
           ${{ inputs.s3_additional_args }}
         
