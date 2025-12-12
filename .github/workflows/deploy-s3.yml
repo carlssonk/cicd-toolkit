@@ -61,7 +61,7 @@ on:
         description: "Cache-Control header for latest path (mutable) files"
         required: false
         type: string
-        default: "public, max-age=300"
+        default: "public, max-age=60, s-maxage=3600" # s-maxage is prioritized by CDNs
       commit_hash_length:
         description: "Length of commit hash to use for versioning"
         required: false
