@@ -243,7 +243,7 @@ jobs:
         echo "Deploying versioned path: s3://${{ inputs.s3_bucket }}/${COMMIT_HASH}/"
         
         # Upload versioned path (immutable, long cache)
-        aws s3 sync "${{ inputs.build_output_dir }}/" "s3://${{ inputs.s3_bucket }}/${COMMIT_HASH}/" \
+        aws s3 sync "${{ inputs.build_output_dir }}/" "s3://${{ inputs.s3_bucket }}/releases/${COMMIT_HASH}/" \
           --cache-control "${{ inputs.cache_control_immutable }}" \
           --metadata "deployed-at=${{ steps.current.outputs.timestamp }},commit-hash-short=${COMMIT_HASH},environment=${{ inputs.environment }}" \
           ${{ inputs.s3_additional_args }}

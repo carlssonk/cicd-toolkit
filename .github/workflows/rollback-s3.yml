@@ -141,7 +141,7 @@ jobs:
             echo "This might be the first deployment, or the deployment was made before prev-commit-hash-short tracking was added"
             echo ""
             echo "Available versions in S3:"
-            aws s3 ls "s3://${BUCKET}/" | grep "PRE" | awk '{print $2}' | sed 's/\///' | grep -E '^[a-f0-9]{8}$' || echo "No versions found"
+            aws s3 ls "s3://${BUCKET}/releases/" | grep "PRE" | awk '{print $2}' | sed 's/\///' | grep -E '^[a-f0-9]{8}$' || echo "No versions found"
             exit 1
           fi
           
@@ -159,12 +159,12 @@ jobs:
         
         echo "Checking if commit ${TARGET_HASH} exists in bucket ${BUCKET}..."
         
-        if aws s3 ls "s3://${BUCKET}/${TARGET_HASH}/" | grep -q .; then
+        if aws s3 ls "s3://${BUCKET}/releases/${TARGET_HASH}/" | grep -q .; then
           echo "✅ Commit ${TARGET_HASH} found in S3"
         else
           echo "❌ Commit ${TARGET_HASH} not found in S3"
           echo "This commit was never deployed. Available versions:"
-          aws s3 ls "s3://${BUCKET}/" | grep "PRE" | awk '{print $2}' | sed 's/\///' | grep -E '^[a-f0-9]{8}$' || echo "No versions found"
+          aws s3 ls "s3://${BUCKET}/releases/" | grep "PRE" | awk '{print $2}' | sed 's/\///' | grep -E '^[a-f0-9]{8}$' || echo "No versions found"
           exit 1
         fi
 
@@ -207,14 +207,14 @@ jobs:
         METADATA="${METADATA},rolled-back-from=${CURRENT_HASH},rollback-by=${{ github.actor }}"
         
         # Copy and overwrite files
-        aws s3 cp "s3://${BUCKET}/${TARGET_HASH}/" "s3://${BUCKET}/latest/" \
+        aws s3 cp "s3://${BUCKET}/releases/${TARGET_HASH}/" "s3://${BUCKET}/latest/" \
           --cache-control "${{ inputs.cache_control_mutable }}" \
           --metadata "${METADATA}" \
           --recursive \
           ${{ inputs.s3_additional_args }}
         
         # Delete remaining files
-        aws s3 sync "s3://${BUCKET}/${TARGET_HASH}/" "s3://${BUCKET}/latest/" --delete
+        aws s3 sync "s3://${BUCKET}/releases/${TARGET_HASH}/" "s3://${BUCKET}/latest/" --delete
         
         echo "✅ Rollback complete!"
         echo "Latest path now points to commit: ${TARGET_HASH}"
