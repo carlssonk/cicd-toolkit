@@ -262,15 +262,17 @@ jobs:
         if [[ -n "$PREVIOUS_HASH" ]]; then
           METADATA="${METADATA},prev-commit-hash-short=${PREVIOUS_HASH}"
         fi
-        
-        # Upload latest path (mutable, short cache)
-        aws s3 sync "${{ inputs.build_output_dir }}/" "s3://${{ inputs.s3_bucket }}/latest/" \
+
+        # Copy and overwrite files
+        aws s3 cp "${{ inputs.build_output_dir }}/" "s3://${{ inputs.s3_bucket }}/latest/" \
           --cache-control "${{ inputs.cache_control_mutable }}" \
           --metadata "${METADATA}" \
-          --metadata-directive REPLACE \
-          --delete \
+          --recursive \
           ${{ inputs.s3_additional_args }}
         
+        # Delete remaining files
+        aws s3 sync "${{ inputs.build_output_dir }}/" "s3://${{ inputs.s3_bucket }}/latest/" --delete
+
         echo "✅ Latest path deployment complete"
 
     - name: Set output URLs

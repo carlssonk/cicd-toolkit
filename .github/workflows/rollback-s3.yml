@@ -31,7 +31,7 @@ on:
         description: "Cache-Control header for latest path files"
         required: false
         type: string
-        default: "public, max-age=300"
+        default: "public, max-age=60, s-maxage=3600" # s-maxage is prioritized by CDNs
       enable_cloudflare_cache_purge:
         description: "Enable Cloudflare cache purge after rollback"
         required: false
@@ -186,19 +186,6 @@ jobs:
           echo "current=unknown" >> $GITHUB_OUTPUT
         fi
 
-    - name: Download target commit files
-      run: |
-        BUCKET="${{ inputs.s3_bucket }}"
-        TARGET_HASH="${{ steps.target.outputs.hash }}"
-        
-        echo "Downloading files from commit ${TARGET_HASH}..."
-        mkdir -p rollback-temp
-        aws s3 sync "s3://${BUCKET}/${TARGET_HASH}/" rollback-temp/ \
-          ${{ inputs.s3_additional_args }}
-        
-        FILE_COUNT=$(find rollback-temp -type f | wc -l)
-        echo "Downloaded ${FILE_COUNT} files"
-
     - name: Rollback latest path
       run: |
         BUCKET="${{ inputs.s3_bucket }}"
@@ -219,13 +206,15 @@ jobs:
         # Add rollback tracking
         METADATA="${METADATA},rolled-back-from=${CURRENT_HASH},rollback-by=${{ github.actor }}"
         
-        # Upload to latest path (same logic as deploy)
-        aws s3 sync rollback-temp/ "s3://${BUCKET}/latest/" \
+        # Copy and overwrite files
+        aws s3 cp "s3://${BUCKET}/${TARGET_HASH}/" "s3://${BUCKET}/latest/" \
           --cache-control "${{ inputs.cache_control_mutable }}" \
           --metadata "${METADATA}" \
-          --metadata-directive REPLACE \
-          --delete \
+          --recursive \
           ${{ inputs.s3_additional_args }}
+        
+        # Delete remaining files
+        aws s3 sync "s3://${BUCKET}/${TARGET_HASH}/" "s3://${BUCKET}/latest/" --delete
         
         echo "✅ Rollback complete!"
         echo "Latest path now points to commit: ${TARGET_HASH}"
