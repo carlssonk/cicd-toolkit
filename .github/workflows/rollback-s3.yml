@@ -206,9 +206,13 @@ jobs:
         # Add rollback tracking
         METADATA="${METADATA},rolled-back-from=${CURRENT_HASH},rollback-by=${{ github.actor }}"
         
+        # Use sync with exact-timestamps to force copying all files
+        # This ensures all files are copied and metadata is updated, even if sizes match
         aws s3 sync "s3://${BUCKET}/${TARGET_HASH}/" "s3://${BUCKET}/latest/" \
+          --exact-timestamps \
           --cache-control "${{ inputs.cache_control_mutable }}" \
           --metadata "${METADATA}" \
+          --metadata-directive REPLACE \
           --delete \
           ${{ inputs.s3_additional_args }}
         
