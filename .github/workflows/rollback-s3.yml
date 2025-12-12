@@ -186,6 +186,19 @@ jobs:
           echo "current=unknown" >> $GITHUB_OUTPUT
         fi
 
+    - name: Download target commit files
+      run: |
+        BUCKET="${{ inputs.s3_bucket }}"
+        TARGET_HASH="${{ steps.target.outputs.hash }}"
+        
+        echo "Downloading files from commit ${TARGET_HASH}..."
+        mkdir -p rollback-temp
+        aws s3 sync "s3://${BUCKET}/${TARGET_HASH}/" rollback-temp/ \
+          ${{ inputs.s3_additional_args }}
+        
+        FILE_COUNT=$(find rollback-temp -type f | wc -l)
+        echo "Downloaded ${FILE_COUNT} files"
+
     - name: Rollback latest path
       run: |
         BUCKET="${{ inputs.s3_bucket }}"
@@ -206,16 +219,12 @@ jobs:
         # Add rollback tracking
         METADATA="${METADATA},rolled-back-from=${CURRENT_HASH},rollback-by=${{ github.actor }}"
         
-        # Delete all files in latest/ first to ensure clean rollback
-        aws s3 rm "s3://${BUCKET}/latest/" --recursive || exit 1
-
-        # TODO: Add error handling for cases if sync command fails so we're not left with an empty bucket
-        aws s3 sync "s3://${BUCKET}/${TARGET_HASH}/" "s3://${BUCKET}/latest/" \
-          --delete \
-          --metadata-directive REPLACE \
+        # Upload to latest path (same logic as deploy)
+        aws s3 sync rollback-temp/ "s3://${BUCKET}/latest/" \
           --cache-control "${{ inputs.cache_control_mutable }}" \
           --metadata "${METADATA}" \
-          ${{ inputs.s3_additional_args }} || exit 1
+          --delete \
+          ${{ inputs.s3_additional_args }}
         
         echo "✅ Rollback complete!"
         echo "Latest path now points to commit: ${TARGET_HASH}"
